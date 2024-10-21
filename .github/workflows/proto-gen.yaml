@@ -51,11 +51,10 @@ jobs:
       - name: Git Setup
         env:
           OUTPUT_PATH: "${{ env.OUTPUT_PATH }}/go/${{ env.GO_PROTO_REPO }}"
-          REPO_URL: "https://${{ env.GO_PROTO_REPO }}"
         run: |
           cd $OUTPUT_PATH
           git init
-          git remote add origin $REPO_URL
+          git remote add origin https://x-access-token:${{ secrets.WORKFLOW_GITHUB_PAT }}@${{ env.GO_PROTO_REPO }}
 
       - name: Commit Changes
         env:
@@ -63,6 +62,6 @@ jobs:
         run: |
           cd $OUTPUT_PATH
           git add .
-          git commit -m "Update Go Protos"
+          git commit -m "Update Go definitions"
           git push origin main
 
