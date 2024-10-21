@@ -13,6 +13,9 @@ env:
 jobs:
   generate_go_proto:
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'write'
+      id-token: 'write'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,4 +40,24 @@ jobs:
       - name: Generate Go Protos
         run: |
           make gen_go
-          ls -la outputs/go
+
+      - name: Git Identity
+        run: |
+          git config --global user.name "Streamweaver Bot"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Git Setup
+        env:
+          OUTPUT_PATH: ${{ env.GO_PROTO_REPO }}
+          REPO_URL: "https://${{ env.GO_PROTO_REPO }}"
+        run: |
+          cd $OUTPUT_PATH
+          git init
+          git remote add origin $REPO_URL
+
+      - name: Commit Changes
+        run: |
+          git add .
+          git commit -m "Update Go Protos"
+          git push --set-upstream origin main
+
