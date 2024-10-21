@@ -8,6 +8,7 @@ on:
       - 'proto/**'
 
 env:
+  OUTPUT_PATH: outputs
   GO_PROTO_REPO: github.com/streamweaverio/go-proto
 
 jobs:
@@ -48,7 +49,7 @@ jobs:
 
       - name: Git Setup
         env:
-          OUTPUT_PATH: ${{ env.GO_PROTO_REPO }}
+          OUTPUT_PATH: "${{ env.OUTPUT_PATH }}/go/${{ env.GO_PROTO_REPO }}"
           REPO_URL: "https://${{ env.GO_PROTO_REPO }}"
         run: |
           cd $OUTPUT_PATH
@@ -56,7 +57,10 @@ jobs:
           git remote add origin $REPO_URL
 
       - name: Commit Changes
+        env:
+          OUTPUT_PATH: "${{ env.OUTPUT_PATH }}/go/${{ env.GO_PROTO_REPO }}"
         run: |
+          cd $OUTPUT_PATH
           git add .
           git commit -m "Update Go Protos"
           git push --set-upstream origin main
