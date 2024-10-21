@@ -46,6 +46,7 @@ jobs:
         run: |
           git config --global user.name "Streamweaver Bot"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global init.defaultBranch main
 
       - name: Git Setup
         env:
@@ -63,5 +64,5 @@ jobs:
           cd $OUTPUT_PATH
           git add .
           git commit -m "Update Go Protos"
-          git push --set-upstream origin main
+          git push origin main
 
