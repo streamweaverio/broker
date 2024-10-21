@@ -1,0 +1,28 @@
+logging:
+  log_level: INFO
+  log_output: console # console, file
+  log_format: text # text, json
+  log_directory: /var/log/streamweaver
+  log_file_prefix: streamweaver-
+  max_file_size: 50000000 # 50MB
+redis:
+  hosts:
+    - host: localhost
+      port: 6379
+    - host: localhost
+      port: 6379
+  db: 0
+  password: ""
+storage:
+  provider: local # local, s3
+  local:
+    directory: /var/lib/streamweaver
+  aws_s3:
+    region: us-east-1
+    bucket: streamweaver
+    access_key_id: ""
+    secret_access_key: ""
+retention:
+  policy: time
+  max_age: 7d
+  max_size: 1000000000 # 1GB

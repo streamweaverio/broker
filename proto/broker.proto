@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package broker;
+
+option go_package = "github.com/streamweaverio/go-proto/broker";
+
+message CreateStreamRequest {
+  string stream_name = 1;
+}
+
+message CreateStreamResponse {
+  string status = 1;
+}
+
+message DeleteStreamRequest {
+  string stream_name = 1;
+}
+
+message DeleteStreamResponse {
+  string status = 1;
+}
+
+message ListStreamsRequest { 
+}
+
+message ListStreamsResponse {
+}
+
+message GetStreamRequest {
+  string stream_name = 1;
+}
+
+message GetStreamResponse {
+  string stream_name = 1;
+}
+
+service StreamWeaverBroker {
+  rpc CreateStream(CreateStreamRequest) returns (CreateStreamResponse);
+  rpc DeleteStream(DeleteStreamRequest) returns (DeleteStreamResponse);
+  rpc ListStreams(ListStreamsRequest) returns (ListStreamsResponse);
+  rpc GetStream(GetStreamRequest) returns (GetStreamResponse);
+}
