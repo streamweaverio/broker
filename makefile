@@ -1,7 +1,7 @@
 BINARY_NAME=streamweaver
 
 PROTO_DIR = proto/
-PROTO_FILE = $(PROTO_DIR)/broker.proto
+PROTO_FILE = $(PROTO_DIR)broker.proto
 
 # Output paths
 OUTPUT_GO = ./outputs/go
