@@ -62,7 +62,11 @@ jobs:
         run: |
           cd $OUTPUT_PATH
           git pull origin main
+
+          git rm -rf --cached . || true
+          git clean -fdx
+
           git add .
-          git commit -m "Update Go definitions"
-          git push origin main
+          git commit -m "Update Go definitions" || echo "No changes to commit"
+          git push origin main --force
 
