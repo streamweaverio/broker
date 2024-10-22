@@ -1,7 +1,7 @@
 BINARY_NAME=streamweaver
 
 PROTO_DIR = proto/
-PROTO_FILE = $(PROTO_DIR)broker.proto
+PROTO_FILES = $(PROTO_DIR)*.proto
 
 # Output paths
 OUTPUT_GO = ./outputs/go
@@ -42,12 +42,12 @@ deps:
 
 gen_go:
 	@mkdir -p $(OUTPUT_GO)
-	protoc -I $(PROTO_DIR) $(PROTO_FILE) \
+	protoc -I $(PROTO_DIR) $(PROTO_FILES) \
 	--go_out=$(OUTPUT_GO) \
 	--go-grpc_out=$(OUTPUT_GO)
 
 gen_node_ts:
 	@mkdir -p $(OUTPUT_NODE)
-	protoc -I $(PROTO_DIR) $(PROTO_FILE) \
+	protoc -I $(PROTO_DIR) $(PROTO_FILES) \
 	--js_out=import_style=commonjs,binary:$(OUTPUT_NODE) \
 	--grpc-web_out=import_style=commonjs,mode=grpcwebtext:$(OUTPUT_NODE)
