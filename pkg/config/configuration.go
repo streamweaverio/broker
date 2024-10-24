@@ -1,10 +1,10 @@
 package config
 
 type StreamWeaverConfig struct {
-	Logging   LoggingConfig   `yaml:"logging"`
-	Redis     RedisConfig     `yaml:"redis"`
-	Storage   StorageConfig   `yaml:"storage"`
-	Retention RetentionConfig `yaml:"retention"`
+	Logging   *LoggingConfig   `yaml:"logging"`
+	Redis     *RedisConfig     `yaml:"redis"`
+	Storage   *StorageConfig   `yaml:"storage"`
+	Retention *RetentionConfig `yaml:"retention"`
 }
 
 type RedisConfig struct {

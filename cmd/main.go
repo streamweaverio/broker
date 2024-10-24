@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"streamweaver/broker/cmd/streamweaver"
+	"streamweaver/core/cmd/streamweaver"
 
 	"github.com/spf13/cobra"
 )
