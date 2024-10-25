@@ -25,9 +25,9 @@ type RedisHostConfig struct {
 
 type StorageConfig struct {
 	// provider of the storage; either "local" or "aws_s3"
-	Provider string                     `yaml:"provider"`
-	Local    LocalStorageProviderConfig `yaml:"local"`
-	AWSS3    AWSS3StorageProviderConfig `yaml:"s3"`
+	Provider string                      `yaml:"provider"`
+	Local    *LocalStorageProviderConfig `yaml:"local"`
+	S3       *AWSS3StorageProviderConfig `yaml:"s3"`
 }
 
 // represents the configuration for the local storage provider
@@ -55,7 +55,7 @@ type RetentionConfig struct {
 	// maximum age of a message before its moved to storage
 	MaxAge string `yaml:"max_age"`
 	// maximum size of a stream before messages are moved to storage (in bytes)
-	MaxSize string `yaml:"max_size"`
+	MaxSize int `yaml:"max_size"`
 }
 
 type LoggingConfig struct {
