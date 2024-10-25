@@ -1,5 +1,11 @@
 BINARY_NAME=streamweaver
 
+test:
+	@go test -v ./...
+
+lint:
+	@golangci-lint run
+
 build:
 	@mkdir -p bin
 	@go build -o bin/$(BINARY_NAME) cmd/main.go

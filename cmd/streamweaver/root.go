@@ -11,7 +11,10 @@ func NewBaseCommand(subCommands []*cobra.Command) *cobra.Command {
 		Use:   "streamweaver",
 		Short: "StreamWeaver broker is a distributed message broker using Redis Streams",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+			err := cmd.Help()
+			if err != nil {
+				panic(err)
+			}
 		},
 	}
 

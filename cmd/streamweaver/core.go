@@ -7,7 +7,10 @@ func NewStartCoreCommand() *cobra.Command {
 		Use:   "core",
 		Short: "Start the StreamWeaver core service",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+			err := cmd.Help()
+			if err != nil {
+				panic(err)
+			}
 		},
 	}
 
