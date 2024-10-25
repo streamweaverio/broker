@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"streamweaver/core/pkg/utils"
 )
 
 func (c *RetentionConfig) Validate() error {
@@ -17,6 +18,10 @@ func (c *RetentionConfig) Validate() error {
 	if c.Policy == "time" {
 		if c.MaxAge == "" {
 			return fmt.Errorf("retention.max_age is required when retention.policy is 'time'")
+		}
+
+		if !utils.IsValidTimeUnitString(c.MaxAge) {
+			return fmt.Errorf("retention.max_age must be a valid time unit string")
 		}
 	}
 

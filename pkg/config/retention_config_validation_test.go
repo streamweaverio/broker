@@ -26,6 +26,14 @@ func TestRetentionConfig_Validate(t *testing.T) {
 			ExpectError: false,
 		},
 		{
+			Name: "Invalid time based retention configuration - invalid max_age format",
+			Value: RetentionConfig{
+				Policy: "time",
+				MaxAge: "-1d",
+			},
+			ExpectError: true,
+		},
+		{
 			Name: "Invalid time based retention configuration - missing max age",
 			Value: RetentionConfig{
 				Policy: "time",
