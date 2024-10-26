@@ -7,6 +7,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 const DEFAULT_MAX_CONNECTION_ATTEMPTS = 10
@@ -30,7 +31,7 @@ type ClientOptions struct {
 }
 
 // Create a new Redis client connection
-func NewClient(opts *ClientOptions) (*redis.Client, error) {
+func NewClient(opts *ClientOptions, logger *zap.Logger) (*redis.Client, error) {
 	if opts.MaxConnectionRetries == 0 {
 		opts.MaxConnectionRetries = DEFAULT_MAX_CONNECTION_ATTEMPTS
 	}
@@ -60,18 +61,22 @@ func NewClient(opts *ClientOptions) (*redis.Client, error) {
 		ping, err := client.Ping(opts.Context).Result()
 		if err == nil && ping == "PONG" {
 			// connection established
+			logger.Info("Established connection to Redis", zap.String("host", opts.Host), zap.Int("port", opts.Port))
 			connectionBackoff.Reset()
 			break
 		}
 
 		connectionAttempts++
 		lastError = err
-		// nextRetryTime := time.Now().Add(connectionBackoff.NextBackOff())
+		nextRetryTime := time.Now().Add(connectionBackoff.NextBackOff())
+		logger.Error("Failed to connect to Redis", zap.String("host", opts.Host), zap.Int("port", opts.Port), zap.Error(err), zap.Time("next_retry_at", nextRetryTime))
+
 		if connectionAttempts >= opts.MaxConnectionRetries {
 			lastError = fmt.Errorf("failed to connect to Redis. Max connection attempts reached: %v", opts.MaxConnectionRetries)
 			break
 		}
 
+		logger.Info("Retrying connection to Redis", zap.Int("attempt", connectionAttempts))
 		time.Sleep(connectionBackoff.NextBackOff())
 	}
 
