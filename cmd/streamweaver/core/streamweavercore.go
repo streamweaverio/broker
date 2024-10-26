@@ -1,11 +1,28 @@
 package core
 
-type StreamWeaverCore struct{}
+import (
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+)
 
-func NewCoreService() *StreamWeaverCore {
-	return &StreamWeaverCore{}
+type StreamWeaverCore struct {
+	Redis  *redis.Client
+	Logger *zap.Logger
 }
 
-func (s *StreamWeaverCore) Start() {}
+type StreamWeaverCoreOptions struct {
+	RedisClient *redis.Client
+}
+
+func New(opts *StreamWeaverCoreOptions, logger *zap.Logger) *StreamWeaverCore {
+	return &StreamWeaverCore{
+		Logger: logger,
+		Redis:  opts.RedisClient,
+	}
+}
+
+func (s *StreamWeaverCore) Start() {
+	s.Logger.Info("Starting StreamWeaver core service...")
+}
 
 func (s *StreamWeaverCore) Stop() {}
