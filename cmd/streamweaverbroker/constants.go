@@ -1,4 +1,4 @@
-package streamweaver
+package streamweaverbroker
 
 import "os"
 

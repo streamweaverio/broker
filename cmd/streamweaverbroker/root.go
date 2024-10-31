@@ -1,4 +1,4 @@
-package streamweaver
+package streamweaverbroker
 
 import "github.com/spf13/cobra"
 

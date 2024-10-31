@@ -9,9 +9,8 @@ import (
 )
 
 func main() {
-	startAllCmd := streamweaver.NewStartAllCommand()
-	startCoreCmd := streamweaver.NewStartCoreCommand()
-	rootCmd := streamweaver.NewBaseCommand([]*cobra.Command{startAllCmd, startCoreCmd})
+	startCmd := streamweaver.NewStartCmd()
+	rootCmd := streamweaver.NewBaseCommand([]*cobra.Command{startCmd})
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

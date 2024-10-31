@@ -1,80 +1,50 @@
+version: '3'
+
+services:
+  redis-cluster-node-1:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_NODES=redis-cluster-node-1 redis-cluster-node-2 redis-cluster-node-3
+      - REDIS_PASSWORD=your_password
+      - REDISCLI_AUTH=your_password
+    ports:
+      - "7001:6379"
+    networks:
+      - redis-cluster
+    volumes:
+      - node1-data:/bitnami
+
+  redis-cluster-node-2:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_NODES=redis-cluster-node-1 redis-cluster-node-2 redis-cluster-node-3
+      - REDIS_PASSWORD=your_password
+      - REDISCLI_AUTH=your_password
+    ports:
+      - "7002:6379"
+    networks:
+      - redis-cluster
+    volumes:
+      - node2-data:/bitnami
+
+  redis-cluster-node-3:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_NODES=redis-cluster-node-1 redis-cluster-node-2 redis-cluster-node-3
+      - REDIS_PASSWORD=your_password
+      - REDISCLI_AUTH=your_password
+    ports:
+      - "7003:6379"
+    networks:
+      - redis-cluster
+    volumes:
+      - node3-data:/bitnami
+
 networks:
   redis-cluster:
     driver: bridge
-    name: redis-cluster
 
 volumes:
   node1-data:
   node2-data:
   node3-data:
-
-services:
-  node-1:
-    image: redis:7.4.1-alpine
-    container_name: node-1
-    volumes:
-      - ./local_infra/redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - node1-data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
-    ports:
-      - "7001:6379"
-    networks:
-      redis-cluster:
-        aliases:
-          - node-1
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 15s
-      timeout: 3s
-      retries: 3
-
-  node-2:
-    image: redis:7.4.1-alpine
-    container_name: node-2
-    volumes:
-      - ./local_infra/redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - node2-data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
-    ports:
-      - "7002:6379"
-    networks:
-      redis-cluster:
-        aliases:
-          - node-2
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 15s
-      timeout: 3s
-      retries: 3
-
-  node-3:
-    image: redis:7.4.1-alpine
-    container_name: node-3
-    volumes:
-      - ./local_infra/redis/redis.conf:/usr/local/etc/redis/redis.conf
-      - node3-data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
-    ports:
-      - "7003:6379"
-    networks:
-      redis-cluster:
-        aliases:
-          - node-3
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 15s
-      timeout: 3s
-      retries: 3
-      
-  init:
-    image: redis:7.4.1-alpine
-    container_name: redis-init
-    entrypoint: ["/bin/sh", "-c", "/usr/local/bin/init_cluster.sh", "node-1,node-2,node-3", "6379", "10"]
-    depends_on:
-      - node-1
-      - node-2
-      - node-3
-    networks:
-      - redis-cluster
-    volumes:
-      - ./local_infra/redis/init_cluster.sh:/usr/local/bin/init_cluster.sh
