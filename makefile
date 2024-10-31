@@ -36,3 +36,18 @@ clean:
 
 deps:
 	@go mod tidy
+
+start_local_infra:
+	@docker compose up -d
+
+stop_local_infra:
+	@docker compose down && docker compose down -v
+
+test_local_cluster:
+	@echo "Running tests on local cluster, testing cluster status..."
+	@docker exec node-1 redis-cli cluster info
+	@echo "Running tests on local cluster, testing cluster nodes..."
+	@docker exec node-1 redis-cli cluster nodes
+	@echo "Running tests on local cluster, testing data replication..."
+	@docker exec node-1 redis-cli set key1 value1
+	@docker exec node-3 redis-cli get key1
