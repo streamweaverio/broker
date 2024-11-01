@@ -11,6 +11,7 @@ import (
 	"github.com/streamweaverio/broker/internal/broker"
 	"github.com/streamweaverio/broker/internal/config"
 	"github.com/streamweaverio/broker/internal/logging"
+	"github.com/streamweaverio/broker/internal/redis"
 	"github.com/streamweaverio/broker/pkg/process"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -45,8 +46,26 @@ func NewStartCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
+			// Create redis cluster client
+			redisClient, err := redis.NewClusterClient(&redis.ClusterClientOptions{
+				Ctx:            ctx,
+				Nodes:          MakeRedisNodeAddresses(cfg.Redis.Hosts),
+				Password:       cfg.Redis.Password,
+				DB:             cfg.Redis.DB,
+				MaxPingRetries: 10,
+			}, logger)
+			if err != nil {
+				logger.Fatal("Error creating Redis cluster client", zap.Error(err))
+				os.Exit(1)
+			}
+
+			// redis stream service
+			redisStreamService := redis.NewRedisStreamService(ctx, redisClient, logger, &redis.RedisStreamServiceOptions{
+				GlobalRetentionOptions: cfg.Retention,
+			})
+
 			grpcServer := grpc.NewServer()
-			rpcHandler := broker.NewRPCHandler(logger)
+			rpcHandler := broker.NewRPCHandler(redisStreamService, logger)
 			b := broker.New(&broker.Options{
 				Ctx:    ctx,
 				Port:   cfg.Port,
@@ -78,4 +97,12 @@ func NewStartCmd() *cobra.Command {
 			}
 		},
 	}
+}
+
+func MakeRedisNodeAddresses(hosts []*config.RedisHostConfig) []string {
+	var nodes []string
+	for _, host := range hosts {
+		nodes = append(nodes, fmt.Sprintf("%s:%d", host.Host, host.Port))
+	}
+	return nodes
 }

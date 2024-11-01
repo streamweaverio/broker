@@ -4,22 +4,36 @@ import (
 	"context"
 
 	"github.com/streamweaverio/broker/internal/logging"
+	"github.com/streamweaverio/broker/internal/redis"
 	brokerpb "github.com/streamweaverio/go-protos/broker"
-	"go.uber.org/zap"
 )
 
 type RPCHandler struct {
-	logger logging.LoggerContract
+	Logger  logging.LoggerContract
+	Service redis.RedisStreamServiceContract
 	brokerpb.UnimplementedStreamWeaverBrokerServer
 }
 
-func NewRPCHandler(logger logging.LoggerContract) *RPCHandler {
-	return &RPCHandler{logger: logger}
+func NewRPCHandler(svc redis.RedisStreamServiceContract, logger logging.LoggerContract) *RPCHandler {
+	return &RPCHandler{
+		Logger:  logger,
+		Service: svc,
+	}
 }
 
 // Creates a new stream
 func (h *RPCHandler) CreateStream(ctx context.Context, req *brokerpb.CreateStreamRequest) (*brokerpb.CreateStreamResponse, error) {
-	h.logger.Info("CreateStream", zap.String("stream_name", req.StreamName))
-	// TODO: Implement stream creation logic here (create stream in Redis)
+	err := h.Service.CreateStream(&redis.CreateStreamParameters{
+		Name:    req.StreamName,
+		MaxSize: req.RetentionOptions.MaxSize,
+		MaxAge:  req.RetentionOptions.MaxAge,
+	})
+	if err != nil {
+		return &brokerpb.CreateStreamResponse{
+			Status:       "ERROR",
+			ErrorMessage: err.Error(),
+		}, err
+	}
+
 	return &brokerpb.CreateStreamResponse{Status: "OK"}, nil
 }

@@ -58,7 +58,7 @@ type RetentionConfig struct {
 	// maximum age of a message before its moved to storage
 	MaxAge string `yaml:"max_age"`
 	// maximum size of a stream before messages are moved to storage (in bytes)
-	MaxSize int `yaml:"max_size"`
+	MaxSize int64 `yaml:"max_size"`
 }
 
 type LoggingConfig struct {
