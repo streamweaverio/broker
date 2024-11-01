@@ -3,16 +3,17 @@ package broker
 import (
 	"context"
 
+	"github.com/streamweaverio/broker/internal/logging"
 	brokerpb "github.com/streamweaverio/go-protos/broker"
 	"go.uber.org/zap"
 )
 
 type RPCHandler struct {
-	logger *zap.Logger
+	logger logging.LoggerContract
 	brokerpb.UnimplementedStreamWeaverBrokerServer
 }
 
-func NewRPCHandler(logger *zap.Logger) *RPCHandler {
+func NewRPCHandler(logger logging.LoggerContract) *RPCHandler {
 	return &RPCHandler{logger: logger}
 }
 

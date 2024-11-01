@@ -7,6 +7,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
+	"github.com/streamweaverio/broker/internal/logging"
 	"go.uber.org/zap"
 )
 
@@ -22,7 +23,7 @@ type ClusterClientOptions struct {
 	PingBackoffLimit int
 }
 
-func NewClusterClient(opts *ClusterClientOptions, logger *zap.Logger) (*redis.ClusterClient, error) {
+func NewClusterClient(opts *ClusterClientOptions, logger logging.LoggerContract) (*redis.ClusterClient, error) {
 	var lastError error = nil
 	pingAttemps := 0
 	pingBackoff := backoff.NewExponentialBackOff()

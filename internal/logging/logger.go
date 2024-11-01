@@ -9,6 +9,14 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+type LoggerContract interface {
+	Debug(msg string, fields ...zap.Field)
+	Info(msg string, fields ...zap.Field)
+	Warn(msg string, fields ...zap.Field)
+	Error(msg string, fields ...zap.Field)
+	Fatal(msg string, fields ...zap.Field)
+}
+
 type LoggerOptions struct {
 	// Log level: debug, info, warn, error, fatal
 	LogLevel string

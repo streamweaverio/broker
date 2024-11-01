@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/streamweaverio/broker/internal/logging"
 	brokerpb "github.com/streamweaverio/go-protos/broker"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -13,7 +14,7 @@ import (
 type Broker struct {
 	ctx    context.Context
 	config *Options
-	logger *zap.Logger
+	logger logging.LoggerContract
 	server *grpc.Server
 	rpc    brokerpb.StreamWeaverBrokerServer
 }
@@ -21,7 +22,7 @@ type Broker struct {
 type Options struct {
 	Ctx    context.Context
 	Port   int
-	Logger *zap.Logger
+	Logger logging.LoggerContract
 	RPC    brokerpb.StreamWeaverBrokerServer
 	Server *grpc.Server
 }
