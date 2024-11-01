@@ -10,11 +10,15 @@ import (
 )
 
 type LoggerContract interface {
-	Debug(msg string, fields ...zap.Field)
-	Info(msg string, fields ...zap.Field)
-	Warn(msg string, fields ...zap.Field)
-	Error(msg string, fields ...zap.Field)
-	Fatal(msg string, fields ...zap.Field)
+	Debug(msg string, fields ...zapcore.Field)
+	Info(msg string, fields ...zapcore.Field)
+	Warn(msg string, fields ...zapcore.Field)
+	Error(msg string, fields ...zapcore.Field)
+	Fatal(msg string, fields ...zapcore.Field)
+}
+
+type Logger struct {
+	_Logger *zap.Logger
 }
 
 type LoggerOptions struct {
@@ -32,7 +36,17 @@ type LoggerOptions struct {
 	MaxFileSize int
 }
 
-func NewLogger(opts *LoggerOptions) (*zap.Logger, error) {
+func NewLogger(opts *LoggerOptions) (*Logger, error) {
+	zapLogger, err := NewZapLogger(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Logger{_Logger: zapLogger}, nil
+}
+
+// Create a new zap logger
+func NewZapLogger(opts *LoggerOptions) (*zap.Logger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
@@ -97,4 +111,24 @@ func ParseLogLevel(level string) zap.AtomicLevel {
 	default:
 		return zap.NewAtomicLevelAt(zapcore.InfoLevel)
 	}
+}
+
+func (l *Logger) Debug(msg string, fields ...zapcore.Field) {
+	l._Logger.Debug(msg, fields...)
+}
+
+func (l *Logger) Info(msg string, fields ...zapcore.Field) {
+	l._Logger.Info(msg, fields...)
+}
+
+func (l *Logger) Warn(msg string, fields ...zapcore.Field) {
+	l._Logger.Warn(msg, fields...)
+}
+
+func (l *Logger) Error(msg string, fields ...zapcore.Field) {
+	l._Logger.Error(msg, fields...)
+}
+
+func (l *Logger) Fatal(msg string, fields ...zapcore.Field) {
+	l._Logger.Fatal(msg, fields...)
 }
