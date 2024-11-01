@@ -3,14 +3,14 @@ package main
 import (
 	"fmt"
 	"os"
-	"streamweaver/core/cmd/streamweaver"
 
 	"github.com/spf13/cobra"
+	"github.com/streamweaverio/broker/cmd/streamweaverbroker"
 )
 
 func main() {
-	startCmd := streamweaver.NewStartCmd()
-	rootCmd := streamweaver.NewBaseCommand([]*cobra.Command{startCmd})
+	startCmd := streamweaverbroker.NewStartCmd()
+	rootCmd := streamweaverbroker.NewBaseCommand([]*cobra.Command{startCmd})
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
