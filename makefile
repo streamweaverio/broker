@@ -1,4 +1,4 @@
-BINARY_NAME=streamweaver
+BINARY_NAME=streamweaverbroker
 
 test:
 	@go test -v ./...
@@ -29,10 +29,20 @@ build-windows:
 build-all: build-linux build-linux-arm build-macos build-windows
 
 run: build
-	@./bin/$(BINARY_NAME)
+	@./bin/$(BINARY_NAME) start
 
 clean:
 	@rm -rf bin
 
 deps:
 	@go mod tidy
+
+start_local_infra:
+	@docker compose up -d
+
+local_infra_macos:
+	@export REDIS_CLUSTER_IP=$(echo "$(route get uninterrupted.tech | grep interface | sed -e 's/.*: //' | xargs ipconfig getifaddr)") && \
+	docker compose up -d
+
+stop_local_infra:
+	@docker compose down && docker compose down -v

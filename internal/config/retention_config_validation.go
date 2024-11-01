@@ -3,7 +3,8 @@ package config
 import (
 	"fmt"
 	"slices"
-	"streamweaver/core/pkg/utils"
+
+	"github.com/streamweaverio/broker/pkg/utils"
 )
 
 func (c *RetentionConfig) Validate() error {

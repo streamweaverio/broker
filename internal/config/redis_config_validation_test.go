@@ -12,7 +12,7 @@ var testCases = []RedisConfigTestCase{
 	{
 		Name: "Valid configuration",
 		Value: RedisConfig{
-			Hosts: []RedisHostConfig{
+			Hosts: []*RedisHostConfig{
 				{
 					Host: "localhost",
 					Port: 6379,
@@ -24,7 +24,7 @@ var testCases = []RedisConfigTestCase{
 	{
 		Name: "Missing host",
 		Value: RedisConfig{
-			Hosts: []RedisHostConfig{
+			Hosts: []*RedisHostConfig{
 				{
 					Port: 6379,
 				},
@@ -36,7 +36,7 @@ var testCases = []RedisConfigTestCase{
 	{
 		Name: "No hosts",
 		Value: RedisConfig{
-			Hosts:    []RedisHostConfig{},
+			Hosts:    []*RedisHostConfig{},
 			DB:       0,
 			Password: "password",
 		},

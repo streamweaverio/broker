@@ -1,2 +1,4 @@
 bin
+logs
 outputs
+streamweaverbroker.pid

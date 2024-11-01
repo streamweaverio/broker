@@ -1,6 +1,9 @@
 package config
 
 type StreamWeaverConfig struct {
+	// Port for rpc server to listen on
+	Port int `yaml:"port"`
+	// Logging configuration
 	Logging   *LoggingConfig   `yaml:"logging"`
 	Redis     *RedisConfig     `yaml:"redis"`
 	Storage   *StorageConfig   `yaml:"storage"`
@@ -9,7 +12,7 @@ type StreamWeaverConfig struct {
 
 type RedisConfig struct {
 	// list of Redis hosts to connect to
-	Hosts []RedisHostConfig `yaml:"hosts"`
+	Hosts []*RedisHostConfig `yaml:"hosts"`
 	// database to use within Redis
 	DB int `yaml:"db"`
 	// password to use when connecting to Redis
@@ -55,7 +58,7 @@ type RetentionConfig struct {
 	// maximum age of a message before its moved to storage
 	MaxAge string `yaml:"max_age"`
 	// maximum size of a stream before messages are moved to storage (in bytes)
-	MaxSize int `yaml:"max_size"`
+	MaxSize int64 `yaml:"max_size"`
 }
 
 type LoggingConfig struct {

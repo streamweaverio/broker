@@ -3,8 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
-	"streamweaver/core/pkg/utils"
 
+	"github.com/streamweaverio/broker/pkg/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -12,6 +12,7 @@ import (
 func ReadConfiguration(filepath string) (*StreamWeaverConfig, error) {
 	// set up the configuration struct with default values
 	config := StreamWeaverConfig{
+		Port: 3000,
 		Logging: &LoggingConfig{
 			LogLevel:  "INFO",
 			LogOutput: "console",
