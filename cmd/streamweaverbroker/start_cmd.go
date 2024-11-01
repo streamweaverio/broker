@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/streamweaverio/broker/internal/broker"
 	"github.com/streamweaverio/broker/internal/config"
+	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/pkg/process"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -32,12 +33,12 @@ func NewStartCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			logger, err := logging.New(&logging.Options{
-				Level:      cfg.Logging.LogLevel,
-				Output:     cfg.Logging.LogOutput,
-				Format:     cfg.Logging.LogFormat,
-				FilePrefix: cfg.Logging.LogFilePrefix,
-				Directory:  cfg.Logging.LogDirectory,
+			logger, err := logging.NewLogger(&logging.LoggerOptions{
+				LogLevel:      cfg.Logging.LogLevel,
+				LogOutput:     cfg.Logging.LogOutput,
+				LogFormat:     cfg.Logging.LogFormat,
+				LogFilePrefix: cfg.Logging.LogFilePrefix,
+				LogDirectory:  cfg.Logging.LogDirectory,
 			})
 			if err != nil {
 				fmt.Printf("Error creating logger: %v\n", err)
@@ -71,6 +72,10 @@ func NewStartCmd() *cobra.Command {
 			<-quit
 
 			b.Stop()
+			if err := process.RemovePIDFile(processPIDFile); err != nil {
+				logger.Error("Error removing PID file", zap.Error(err))
+				os.Exit(1)
+			}
 		},
 	}
 }
