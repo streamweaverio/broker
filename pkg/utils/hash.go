@@ -1,9 +1,11 @@
 package utils
 
-func HashString(s string) uint64 {
+import "strconv"
+
+func HashString(s string) string {
 	var h uint64
 	for i := 0; i < len(s); i++ {
 		h = (h << 5) + h + uint64(s[i])
 	}
-	return h
+	return strconv.Itoa(int(h))
 }
