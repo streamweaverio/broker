@@ -9,4 +9,7 @@ import (
 type RedisStreamClient interface {
 	XAdd(ctx context.Context, args *rdb.XAddArgs) *rdb.StringCmd
 	XDel(ctx context.Context, stream string, ids ...string) *rdb.IntCmd
+	HSet(ctx context.Context, key string, values ...interface{}) *rdb.IntCmd
+	HSetNX(ctx context.Context, key, field string, value interface{}) *rdb.BoolCmd
+	HGetAll(ctx context.Context, key string) *rdb.MapStringStringCmd
 }
