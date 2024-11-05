@@ -13,37 +13,8 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type MockRedisClient struct {
-	mock.Mock
-}
-
-func (m *MockRedisClient) XAdd(ctx context.Context, params *rdb.XAddArgs) *rdb.StringCmd {
-	args := m.Called(ctx, params)
-	return args.Get(0).(*rdb.StringCmd)
-}
-
-func (m *MockRedisClient) XDel(ctx context.Context, stream string, ids ...string) *rdb.IntCmd {
-	args := m.Called(ctx, stream, ids)
-	return args.Get(0).(*rdb.IntCmd)
-}
-
-func (m *MockRedisClient) HSet(ctx context.Context, key string, values ...interface{}) *rdb.IntCmd {
-	args := m.Called(ctx, key, values)
-	return args.Get(0).(*rdb.IntCmd)
-}
-
-func (m *MockRedisClient) HSetNX(ctx context.Context, key, field string, value interface{}) *rdb.BoolCmd {
-	args := m.Called(ctx, key, field, value)
-	return args.Get(0).(*rdb.BoolCmd)
-}
-
-func (m *MockRedisClient) HGetAll(ctx context.Context, key string) *rdb.MapStringStringCmd {
-	args := m.Called(ctx, key)
-	return args.Get(0).(*rdb.MapStringStringCmd)
-}
-
 // Helper function for setting up the service and mock client
-func setupRedisStreamService(t *testing.T) (*RedisStreamService, *MockRedisClient) {
+func setupRedisStreamService() (*RedisStreamService, *MockRedisClient) {
 	client := &MockRedisClient{}
 	logger := testutils.NewMockLogger()
 	opts := &RedisStreamServiceOptions{
@@ -58,7 +29,7 @@ func setupRedisStreamService(t *testing.T) (*RedisStreamService, *MockRedisClien
 }
 
 func MetadataKeyMatcher(streamName string) func(interface{}) bool {
-	expectedKey := fmt.Sprintf("%s%d", STREAM_META_DATA_PREFIX, utils.HashString(streamName))
+	expectedKey := fmt.Sprintf("%s%s", STREAM_META_DATA_PREFIX, utils.HashString(streamName))
 	return func(value interface{}) bool {
 		key, ok := value.(string)
 		return ok && key == expectedKey
@@ -67,7 +38,7 @@ func MetadataKeyMatcher(streamName string) func(interface{}) bool {
 
 func TestRedisStreamService_CreateStream(t *testing.T) {
 	t.Run("CreateStream with valid parameters and size retention policy", func(t *testing.T) {
-		service, client := setupRedisStreamService(t)
+		service, client := setupRedisStreamService()
 		params := &CreateStreamParameters{
 			Name:            "test-stream",
 			MaxSize:         10000,
@@ -91,6 +62,11 @@ func TestRedisStreamService_CreateStream(t *testing.T) {
 				fields["max_size"] == "10000" &&
 				fields["created_at"] != ""
 		})).Return(&rdb.IntCmd{})
+
+		client.On("SAdd",
+			mock.Anything,
+			STREAM_RETENTION_POLICY_SIZE_BUCKET_KEY,
+			[]interface{}{utils.HashString(params.Name)}).Return(&rdb.IntCmd{})
 
 		client.On("XDel", mock.Anything, "test-stream", mock.Anything).Return(&rdb.IntCmd{})
 

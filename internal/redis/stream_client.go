@@ -12,4 +12,5 @@ type RedisStreamClient interface {
 	HSet(ctx context.Context, key string, values ...interface{}) *rdb.IntCmd
 	HSetNX(ctx context.Context, key, field string, value interface{}) *rdb.BoolCmd
 	HGetAll(ctx context.Context, key string) *rdb.MapStringStringCmd
+	SAdd(ctx context.Context, key string, members ...interface{}) *rdb.IntCmd
 }
