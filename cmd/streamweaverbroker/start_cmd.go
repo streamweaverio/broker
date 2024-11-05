@@ -58,7 +58,6 @@ func NewStartCmd() *cobra.Command {
 				logger.Fatal("Error creating Redis cluster client", zap.Error(err))
 				os.Exit(1)
 			}
-
 			// redis stream service
 			redisStreamService := redis.NewRedisStreamService(ctx, redisClient, logger, &redis.RedisStreamServiceOptions{
 				GlobalRetentionOptions: cfg.Retention,
