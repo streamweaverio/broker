@@ -49,6 +49,7 @@ func NewLogger(opts *LoggerOptions) (*Logger, error) {
 func NewZapLogger(opts *LoggerOptions) (*zap.Logger, error) {
 	encoderConfig := zap.NewProductionEncoderConfig()
 
+	encoderConfig.EncodeName = zapcore.FullNameEncoder
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	encoderConfig.TimeKey = "timestamp"
@@ -90,7 +91,9 @@ func NewZapLogger(opts *LoggerOptions) (*zap.Logger, error) {
 		ParseLogLevel(opts.LogLevel),
 	)
 
-	return zap.New(core), nil
+	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
+
+	return logger, nil
 }
 
 func ParseLogLevel(level string) zap.AtomicLevel {

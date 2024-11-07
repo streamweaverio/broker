@@ -12,6 +12,7 @@ import (
 	"github.com/streamweaverio/broker/internal/config"
 	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/internal/redis"
+	"github.com/streamweaverio/broker/internal/retention"
 	"github.com/streamweaverio/broker/pkg/process"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -58,13 +59,29 @@ func NewStartCmd() *cobra.Command {
 				logger.Fatal("Error creating Redis cluster client", zap.Error(err))
 				os.Exit(1)
 			}
-			// redis stream service
+
 			redisStreamService := redis.NewRedisStreamService(ctx, redisClient, logger, &redis.RedisStreamServiceOptions{
 				GlobalRetentionOptions: cfg.Retention,
 			})
 
 			grpcServer := grpc.NewServer()
 			rpcHandler := broker.NewRPCHandler(redisStreamService, logger)
+
+			// Retention Manager
+			retentionManager, err := retention.NewRetentionManager(&retention.RetentionManagerOptions{
+				Interval: 30,
+			}, logger)
+			if err != nil {
+				logger.Fatal("Error creating retention manager", zap.Error(err))
+				os.Exit(1)
+			}
+
+			// Register retention policies
+			sizeRetentionPolicy := retention.NewSizeRetentionPolicy(redisClient, redis.STREAM_RETENTION_POLICY_SIZE_BUCKET_KEY, logger)
+			timeRetentionPolicy := retention.NewTimeRetentionPolicy(redisClient, redis.STREAM_RETENTION_POLICY_TIME_BUCKET_KEY, logger)
+			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "size", Rule: sizeRetentionPolicy})
+			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
+
 			b := broker.New(&broker.Options{
 				Ctx:    ctx,
 				Port:   cfg.Port,
@@ -85,11 +102,20 @@ func NewStartCmd() *cobra.Command {
 				}
 			}()
 
+			go func() {
+				if err := retentionManager.Start(); err != nil {
+					logger.Fatal("Error starting retention manager", zap.Error(err))
+					cancel()
+				}
+			}()
+
 			quit := make(chan os.Signal, 1)
 			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 			<-quit
 
 			b.Stop()
+			retentionManager.Stop()
+
 			if err := process.RemovePIDFile(processPIDFile); err != nil {
 				logger.Error("Error removing PID file", zap.Error(err))
 				os.Exit(1)
