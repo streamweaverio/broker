@@ -46,7 +46,7 @@ func (m *MockRedisClient) SAdd(ctx context.Context, key string, members ...inter
 	return args.Get(0).(*rdb.IntCmd)
 }
 
-func (m *MockRedisClient) SMembers(key string) *rdb.StringSliceCmd {
+func (m *MockRedisClient) SMembers(ctx context.Context, key string) *rdb.StringSliceCmd {
 	args := m.Called(key)
 	return args.Get(0).(*rdb.StringSliceCmd)
 }
