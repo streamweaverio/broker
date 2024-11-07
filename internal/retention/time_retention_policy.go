@@ -36,8 +36,12 @@ func (s *TimeRetentionPolicy) Enforce() error {
 	s.Logger.Info("Found streams with time retention policy attached", zap.Int("count", streamCount))
 
 	for _, stream := range streams {
-		s.Logger.Info("Applying time retention policy to stream...", zap.String("name", stream))
-		s.ApplyPolicy(stream)
+		s.Logger.Info("Applying time retention policy to stream...", zap.String("hash", stream))
+		err := s.ApplyPolicy(stream)
+		if err != nil {
+			s.Logger.Error("Failed to apply time retention policy to stream", zap.String("hash", stream), zap.Error(err))
+			continue
+		}
 	}
 
 	return nil
