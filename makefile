@@ -40,9 +40,17 @@ deps:
 start_local_infra:
 	@docker compose up -d
 
-local_infra_macos:
-	@export REDIS_CLUSTER_IP=$(echo "$(route get uninterrupted.tech | grep interface | sed -e 's/.*: //' | xargs ipconfig getifaddr)") && \
-	docker compose up -d
+set_redis_cluster_ip:
+	@INTERFACE=$$(route get uninterrupted.tech | grep 'interface:' | awk '{print $$2}') && \
+	if [ -n "$$INTERFACE" ]; then \
+		export REDIS_CLUSTER_IP=$$(ipconfig getifaddr "$$INTERFACE"); \
+		echo "Redis Cluster IP: $$REDIS_CLUSTER_IP"; \
+	else \
+		echo "Failed to determine the network interface."; \
+	fi
+
+local_infra_macos: set_redis_cluster_ip
+	@docker compose up -d
 
 stop_local_infra:
 	@docker compose down && docker compose down -v
