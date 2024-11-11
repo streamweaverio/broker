@@ -13,20 +13,15 @@ func TestRetentionConfig_Validate(t *testing.T) {
 		{
 			Name: "Valid time based retention configuration",
 			Value: RetentionConfig{
-				MaxAge: "1d",
+				MaxAge: 3600000,
 			},
 			ExpectError: false,
 		},
 		{
-			Name: "Invalid time based retention configuration - invalid max_age format",
+			Name: "Invalid time based retention configuration - native max age",
 			Value: RetentionConfig{
-				MaxAge: "-1d",
+				MaxAge: -3600000,
 			},
-			ExpectError: true,
-		},
-		{
-			Name:        "Invalid time based retention configuration - missing max age",
-			Value:       RetentionConfig{},
 			ExpectError: true,
 		},
 	}

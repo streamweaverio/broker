@@ -53,8 +53,8 @@ type AWSS3StorageProviderConfig struct {
 
 // global retention policy for the broker, which applies to all streams by default unless overridden by the stream configuration
 type RetentionConfig struct {
-	// maximum age of a message before its moved to storage
-	MaxAge string `yaml:"max_age"`
+	// maximum age in milliseconds of a message before its moved to storage
+	MaxAge int64 `yaml:"max_age"`
 }
 
 type LoggingConfig struct {

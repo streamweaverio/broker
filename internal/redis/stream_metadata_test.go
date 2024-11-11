@@ -35,7 +35,7 @@ func TestStreamMetadataImpl_WriteStreamMetadata(t *testing.T) {
 		streamName := "test-stream"
 		streamMetadata := &StreamMetadata{
 			Name:      streamName,
-			MaxAge:    "2h",
+			MaxAge:    7200000,
 			CreatedAt: 1620000000,
 		}
 
@@ -43,7 +43,7 @@ func TestStreamMetadataImpl_WriteStreamMetadata(t *testing.T) {
 		existingMetadata := map[string]string{
 			"name":             streamName,
 			"retention_policy": "time",
-			"max_age":          "1h",
+			"max_age":          "3600000",
 			"created_at":       "1620000000",
 		}
 
@@ -54,7 +54,7 @@ func TestStreamMetadataImpl_WriteStreamMetadata(t *testing.T) {
 		client.
 			On("HSet", mock.Anything, mock.MatchedBy(MetadataKeyMatcher(streamName)), mock.MatchedBy(func(value []interface{}) bool {
 				val, ok := value[0].(map[string]string)
-				return ok && val["name"] == streamMetadata.Name && val["max_age"] == streamMetadata.MaxAge
+				return ok && val["name"] == streamMetadata.Name && val["max_age"] == fmt.Sprintf("%d", streamMetadata.MaxAge)
 			})).
 			Return(redis.NewIntResult(1, nil))
 

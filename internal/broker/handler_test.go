@@ -28,18 +28,13 @@ func TestRPCHandler_CreateStream(t *testing.T) {
 
 	ctx := context.Background()
 	req := &brokerpb.CreateStreamRequest{
-		StreamName: "test-stream",
-		RetentionOptions: &brokerpb.StreamRetentionOptions{
-			RetentionPolicy: brokerpb.StreamRetentionPolicy_SIZE_RETENTION_POLICY,
-			MaxSize:         10000,
-			MaxAge:          "1d",
-		},
+		StreamName:      "test-stream",
+		RetentionTimeMs: 3600000,
 	}
 
 	// Set up the mock to expect the call
 	svc.On("CreateStream", mock.MatchedBy(func(p *redis.CreateStreamParameters) bool {
-		return p.Name == req.StreamName &&
-			p.MaxAge == req.RetentionOptions.MaxAge
+		return p.Name == req.StreamName && p.MaxAge == req.RetentionTimeMs
 	})).Return(nil)
 
 	// Call the CreateStream method

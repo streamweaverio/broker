@@ -45,11 +45,7 @@ func (s *StreamMetadataServiceImpl) WriteStreamMetadata(value *StreamMetadata) e
 		if value.Name != "" && value.Name != metadata["name"] {
 			metadata["name"] = value.Name
 		}
-
-		if value.MaxAge != "" && value.MaxAge != metadata["max_age"] {
-			metadata["max_age"] = value.MaxAge
-		}
-
+		metadata["max_age"] = strconv.FormatInt(value.MaxAge, 10)
 		metadata["updated_at"] = strconv.FormatInt(time.Now().Unix(), 10)
 
 		err := s.Client.HSet(s.Ctx, key, metadata).Err()
@@ -62,7 +58,7 @@ func (s *StreamMetadataServiceImpl) WriteStreamMetadata(value *StreamMetadata) e
 
 	err = s.Client.HSet(s.Ctx, key, map[string]interface{}{
 		"name":       value.Name,
-		"max_age":    value.MaxAge,
+		"max_age":    strconv.FormatInt(value.MaxAge, 10),
 		"created_at": strconv.FormatInt(value.CreatedAt, 10),
 	}).Err()
 	if err != nil {

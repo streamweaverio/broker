@@ -17,7 +17,7 @@ func setupRedisStreamService() (*RedisStreamService, *MockRedisClient, *StreamMe
 	logger := testutils.NewMockLogger()
 	metadataService := NewStreamMetadataServiceMock()
 	retentionOptions := &config.RetentionConfig{
-		MaxAge: "1h",
+		MaxAge: 3600000,
 	}
 
 	service := NewRedisStreamService(&RedisStreamServiceOptions{
@@ -35,7 +35,7 @@ func TestRedisStreamService_CreateStream(t *testing.T) {
 		service, client, metadataService := setupRedisStreamService()
 		params := &CreateStreamParameters{
 			Name:   "test-stream",
-			MaxAge: "1h",
+			MaxAge: 3600000,
 		}
 
 		metadataService.On("WriteStreamMetadata", mock.MatchedBy(func(value interface{}) bool {

@@ -13,12 +13,12 @@ import (
 
 type CreateStreamParameters struct {
 	Name   string
-	MaxAge string
+	MaxAge int64
 }
 
 type StreamMetadata struct {
 	Name      string
-	MaxAge    string
+	MaxAge    int64
 	CreatedAt int64
 	UpdatedAt int64
 }
@@ -65,7 +65,7 @@ func (p *CreateStreamParameters) Validate() error {
 func (s *RedisStreamService) CreateStream(params *CreateStreamParameters) error {
 	s.Logger.Debug("Creating stream...", zap.String("name", params.Name))
 
-	if params.MaxAge == "" {
+	if params.MaxAge == 0 {
 		params.MaxAge = s.GlobalRetentionOptions.MaxAge
 	}
 
