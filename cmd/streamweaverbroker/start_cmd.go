@@ -81,7 +81,7 @@ func NewStartCmd() *cobra.Command {
 
 			// Register retention policies
 			sizeRetentionPolicy := retention.NewSizeRetentionPolicy(redisClient, redis.STREAM_RETENTION_POLICY_SIZE_BUCKET_KEY, logger)
-			timeRetentionPolicy := retention.NewTimeRetentionPolicy(redisClient, redis.STREAM_RETENTION_POLICY_TIME_BUCKET_KEY, logger)
+			timeRetentionPolicy := retention.NewTimeRetentionPolicy(ctx, redisClient, redis.STREAM_RETENTION_POLICY_TIME_BUCKET_KEY, logger)
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "size", Rule: sizeRetentionPolicy})
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
 
