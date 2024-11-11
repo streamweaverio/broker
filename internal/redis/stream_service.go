@@ -34,22 +34,27 @@ type RedisStreamServiceContract interface {
 
 // Implements RedisStreamServiceContract
 type RedisStreamService struct {
-	Ctx    context.Context
-	Client RedisStreamClient
-	Logger logging.LoggerContract
-	Opts   *RedisStreamServiceOptions
-}
-
-type RedisStreamServiceOptions struct {
+	Ctx                    context.Context
+	Client                 RedisStreamClient
+	StreamMetadataService  StreamMetadataService
+	Logger                 logging.LoggerContract
 	GlobalRetentionOptions *config.RetentionConfig
 }
 
-func NewRedisStreamService(ctx context.Context, client RedisStreamClient, logger logging.LoggerContract, opts *RedisStreamServiceOptions) *RedisStreamService {
+type RedisStreamServiceOptions struct {
+	Ctx                    context.Context
+	MetadataService        StreamMetadataService
+	RedisClient            RedisStreamClient
+	GlobalRetentionOptions *config.RetentionConfig
+}
+
+func NewRedisStreamService(opts *RedisStreamServiceOptions, logger logging.LoggerContract) *RedisStreamService {
 	return &RedisStreamService{
-		Client: client,
-		Logger: logger,
-		Ctx:    ctx,
-		Opts:   opts,
+		Client:                 opts.RedisClient,
+		StreamMetadataService:  opts.MetadataService,
+		Logger:                 logger,
+		Ctx:                    opts.Ctx,
+		GlobalRetentionOptions: opts.GlobalRetentionOptions,
 	}
 }
 
@@ -65,15 +70,15 @@ func (s *RedisStreamService) CreateStream(params *CreateStreamParameters) error 
 	s.Logger.Debug("Creating stream...", zap.String("name", params.Name))
 
 	if params.RetentionPolicy == "" {
-		params.RetentionPolicy = s.Opts.GlobalRetentionOptions.Policy
+		params.RetentionPolicy = s.GlobalRetentionOptions.Policy
 	}
 
 	if params.RetentionPolicy == "time" && params.MaxAge == "" {
-		params.MaxAge = s.Opts.GlobalRetentionOptions.MaxAge
+		params.MaxAge = s.GlobalRetentionOptions.MaxAge
 	}
 
 	if params.RetentionPolicy == "size" && params.MaxSize == 0 {
-		params.MaxSize = s.Opts.GlobalRetentionOptions.MaxSize
+		params.MaxSize = s.GlobalRetentionOptions.MaxSize
 	}
 
 	err := params.Validate()
@@ -92,7 +97,7 @@ func (s *RedisStreamService) CreateStream(params *CreateStreamParameters) error 
 		return fmt.Errorf("failed to create stream: %w", err)
 	}
 
-	err = s.WriteStreamMetadata(&StreamMetadata{
+	err = s.StreamMetadataService.WriteStreamMetadata(&StreamMetadata{
 		Name:            params.Name,
 		RetentionPolicy: params.RetentionPolicy,
 		MaxSize:         params.MaxSize,
@@ -104,7 +109,7 @@ func (s *RedisStreamService) CreateStream(params *CreateStreamParameters) error 
 	}
 
 	// Add the stream to the retention bucket for the retention policy. This is used by the retention process to manage the stream.
-	err = s.AddToRetentionBucket(params.Name, params.RetentionPolicy)
+	err = s.StreamMetadataService.AddToRetentionBucket(params.Name, params.RetentionPolicy)
 	if err != nil {
 		return err
 	}
