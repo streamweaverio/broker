@@ -60,9 +60,12 @@ func NewStartCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
-			redisStreamService := redis.NewRedisStreamService(ctx, redisClient, logger, &redis.RedisStreamServiceOptions{
+			redisStreamService := redis.NewRedisStreamService(&redis.RedisStreamServiceOptions{
+				Ctx:                    ctx,
+				MetadataService:        redis.NewStreamMetadataService(ctx, redisClient, logger),
+				RedisClient:            redisClient,
 				GlobalRetentionOptions: cfg.Retention,
-			})
+			}, logger)
 
 			grpcServer := grpc.NewServer()
 			rpcHandler := broker.NewRPCHandler(redisStreamService, logger)
