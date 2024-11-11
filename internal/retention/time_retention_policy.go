@@ -12,13 +12,15 @@ import (
 )
 
 type TimeRetentionPolicy struct {
+	Ctx    context.Context
 	Key    string
 	Redis  redis.RedisStreamClient
 	Logger logging.LoggerContract
 }
 
-func NewTimeRetentionPolicy(redis redis.RedisStreamClient, bucketkey string, logger logging.LoggerContract) *TimeRetentionPolicy {
+func NewTimeRetentionPolicy(ctx context.Context, redis redis.RedisStreamClient, bucketkey string, logger logging.LoggerContract) *TimeRetentionPolicy {
 	return &TimeRetentionPolicy{
+		Ctx:    ctx,
 		Key:    bucketkey,
 		Redis:  redis,
 		Logger: logger,
@@ -48,7 +50,7 @@ func (s *TimeRetentionPolicy) Enforce() error {
 }
 
 func (s *TimeRetentionPolicy) GetStreams() ([]string, error) {
-	streams, err := s.Redis.SMembers(context.TODO(), s.Key).Result()
+	streams, err := s.Redis.SMembers(s.Ctx, s.Key).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +59,7 @@ func (s *TimeRetentionPolicy) GetStreams() ([]string, error) {
 }
 
 func (s *TimeRetentionPolicy) GetStreamRetentionPolicy(stream string) (map[string]string, error) {
-	result, err := s.Redis.HGetAll(context.TODO(), fmt.Sprintf("%s%s", redis.STREAM_META_DATA_PREFIX, stream)).Result()
+	result, err := s.Redis.HGetAll(s.Ctx, fmt.Sprintf("%s%s", redis.STREAM_META_DATA_PREFIX, stream)).Result()
 	if err != nil {
 		return nil, err
 	}
