@@ -1,15 +1,36 @@
 package redis
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/pkg/utils"
 	"go.uber.org/zap"
 )
 
-func (s *RedisStreamService) WriteStreamMetadata(value *StreamMetadata) error {
+type StreamMetadataService interface {
+	WriteStreamMetadata(value *StreamMetadata) error
+	AddToRetentionBucket(streamName string, retentionPolicy string) error
+}
+
+type StreamMetadataServiceImpl struct {
+	Ctx    context.Context
+	Logger logging.LoggerContract
+	Client RedisStreamClient
+}
+
+func NewStreamMetadataService(ctx context.Context, client RedisStreamClient, logger logging.LoggerContract) StreamMetadataService {
+	return &StreamMetadataServiceImpl{
+		Ctx:    ctx,
+		Logger: logger,
+		Client: client,
+	}
+}
+
+func (s *StreamMetadataServiceImpl) WriteStreamMetadata(value *StreamMetadata) error {
 	s.Logger.Debug("Writing stream metadata to Redis...", zap.String("name", value.Name))
 
 	streamHash := utils.HashString(value.Name)
@@ -63,7 +84,7 @@ func (s *RedisStreamService) WriteStreamMetadata(value *StreamMetadata) error {
 }
 
 // Adds a stream to the bucket for the retention policy
-func (s *RedisStreamService) AddToRetentionBucket(streamName string, retentionPolicy string) error {
+func (s *StreamMetadataServiceImpl) AddToRetentionBucket(streamName string, retentionPolicy string) error {
 	streamHash := utils.HashString(streamName)
 	var key string
 	switch retentionPolicy {
