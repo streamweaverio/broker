@@ -18,11 +18,17 @@ type TimeRetentionPolicy struct {
 	Logger logging.LoggerContract
 }
 
-func NewTimeRetentionPolicy(ctx context.Context, redis redis.RedisStreamClient, bucketkey string, logger logging.LoggerContract) *TimeRetentionPolicy {
+type TimeRetentionPolicyOpts struct {
+	Ctx   context.Context
+	Redis redis.RedisStreamClient
+	Key   string
+}
+
+func NewTimeRetentionPolicy(opts *TimeRetentionPolicyOpts, logger logging.LoggerContract) *TimeRetentionPolicy {
 	return &TimeRetentionPolicy{
-		Ctx:    ctx,
-		Key:    bucketkey,
-		Redis:  redis,
+		Ctx:    opts.Ctx,
+		Key:    opts.Key,
+		Redis:  opts.Redis,
 		Logger: logger,
 	}
 }
