@@ -39,7 +39,6 @@ func TestRPCHandler_CreateStream(t *testing.T) {
 	// Set up the mock to expect the call
 	svc.On("CreateStream", mock.MatchedBy(func(p *redis.CreateStreamParameters) bool {
 		return p.Name == req.StreamName &&
-			p.MaxSize == req.RetentionOptions.MaxSize &&
 			p.MaxAge == req.RetentionOptions.MaxAge
 	})).Return(nil)
 

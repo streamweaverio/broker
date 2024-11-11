@@ -13,7 +13,7 @@ import (
 
 type StreamMetadataService interface {
 	WriteStreamMetadata(value *StreamMetadata) error
-	AddToRetentionBucket(streamName string, retentionPolicy string) error
+	AddToRetentionBucket(streamName string, bucketKey string) error
 }
 
 type StreamMetadataServiceImpl struct {
@@ -46,14 +46,6 @@ func (s *StreamMetadataServiceImpl) WriteStreamMetadata(value *StreamMetadata) e
 			metadata["name"] = value.Name
 		}
 
-		if value.RetentionPolicy != "" && value.RetentionPolicy != metadata["retention_policy"] {
-			metadata["retention_policy"] = value.RetentionPolicy
-		}
-
-		if value.MaxSize != 0 && strconv.FormatInt(value.MaxSize, 10) != metadata["max_size"] {
-			metadata["max_size"] = strconv.FormatInt(value.MaxSize, 10)
-		}
-
 		if value.MaxAge != "" && value.MaxAge != metadata["max_age"] {
 			metadata["max_age"] = value.MaxAge
 		}
@@ -69,11 +61,9 @@ func (s *StreamMetadataServiceImpl) WriteStreamMetadata(value *StreamMetadata) e
 	}
 
 	err = s.Client.HSet(s.Ctx, key, map[string]interface{}{
-		"name":             value.Name,
-		"retention_policy": value.RetentionPolicy,
-		"max_size":         strconv.FormatInt(value.MaxSize, 10),
-		"max_age":          value.MaxAge,
-		"created_at":       strconv.FormatInt(value.CreatedAt, 10),
+		"name":       value.Name,
+		"max_age":    value.MaxAge,
+		"created_at": strconv.FormatInt(value.CreatedAt, 10),
 	}).Err()
 	if err != nil {
 		return fmt.Errorf("failed to write stream metadata: %w", err)
@@ -84,24 +74,15 @@ func (s *StreamMetadataServiceImpl) WriteStreamMetadata(value *StreamMetadata) e
 }
 
 // Adds a stream to the bucket for the retention policy
-func (s *StreamMetadataServiceImpl) AddToRetentionBucket(streamName string, retentionPolicy string) error {
+func (s *StreamMetadataServiceImpl) AddToRetentionBucket(streamName string, bucketKey string) error {
 	streamHash := utils.HashString(streamName)
-	var key string
-	switch retentionPolicy {
-	case "size":
-		key = STREAM_RETENTION_POLICY_SIZE_BUCKET_KEY
-	case "time":
-		key = STREAM_RETENTION_POLICY_TIME_BUCKET_KEY
-	default:
-		return fmt.Errorf("invalid retention policy: %s", retentionPolicy)
-	}
 
-	_, err := s.Client.SAdd(s.Ctx, key, streamHash).Result()
+	_, err := s.Client.SAdd(s.Ctx, bucketKey, streamHash).Result()
 	if err != nil {
 		return fmt.Errorf("failed to add stream to retention bucket: %w", err)
 	}
 
-	s.Logger.Debug("Added stream to retention bucket.", zap.String("stream", streamName), zap.String("bucket", key), zap.String("stream_hash", streamHash))
+	s.Logger.Debug("Added stream to retention bucket.", zap.String("stream", streamName), zap.String("bucket", bucketKey), zap.String("stream_hash", streamHash))
 
 	return nil
 }

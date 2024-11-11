@@ -34,10 +34,9 @@ func TestStreamMetadataImpl_WriteStreamMetadata(t *testing.T) {
 		svc, client := CreateTestSubject()
 		streamName := "test-stream"
 		streamMetadata := &StreamMetadata{
-			Name:            streamName,
-			RetentionPolicy: "time",
-			MaxAge:          "2h",
-			CreatedAt:       1620000000,
+			Name:      streamName,
+			MaxAge:    "2h",
+			CreatedAt: 1620000000,
 		}
 
 		// Setup: Metadata exists in Redis
@@ -55,9 +54,7 @@ func TestStreamMetadataImpl_WriteStreamMetadata(t *testing.T) {
 		client.
 			On("HSet", mock.Anything, mock.MatchedBy(MetadataKeyMatcher(streamName)), mock.MatchedBy(func(value []interface{}) bool {
 				val, ok := value[0].(map[string]string)
-				return ok && val["name"] == streamMetadata.Name &&
-					val["retention_policy"] == streamMetadata.RetentionPolicy &&
-					val["max_age"] == streamMetadata.MaxAge
+				return ok && val["name"] == streamMetadata.Name && val["max_age"] == streamMetadata.MaxAge
 			})).
 			Return(redis.NewIntResult(1, nil))
 

@@ -13,6 +13,7 @@ import (
 	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/internal/redis"
 	"github.com/streamweaverio/broker/internal/retention"
+	"github.com/streamweaverio/broker/internal/storage"
 	"github.com/streamweaverio/broker/pkg/process"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -68,7 +69,17 @@ func NewStartCmd() *cobra.Command {
 			}, logger)
 
 			grpcServer := grpc.NewServer()
+			// RPC Handler for broker
 			rpcHandler := broker.NewRPCHandler(redisStreamService, logger)
+
+			// Storage Manager
+			storageManager, err := storage.NewStorageManager(&storage.StorageManagerOpts{
+				WorkerPoolSize: 5,
+			}, logger)
+			if err != nil {
+				logger.Fatal("Error creating storage manager", zap.Error(err))
+				os.Exit(1)
+			}
 
 			// Retention Manager
 			retentionManager, err := retention.NewRetentionManager(&retention.RetentionManagerOptions{
@@ -80,15 +91,15 @@ func NewStartCmd() *cobra.Command {
 			}
 
 			// Register retention policies
-			// sizeRetentionPolicy := retention.NewSizeRetentionPolicy(redisClient, redis.STREAM_RETENTION_POLICY_SIZE_BUCKET_KEY, logger)
+			// Time Retention Policy (default)
 			timeRetentionPolicy := retention.NewTimeRetentionPolicy(&retention.TimeRetentionPolicyOpts{
 				Ctx:   ctx,
 				Redis: redisClient,
-				Key:   redis.STREAM_RETENTION_POLICY_TIME_BUCKET_KEY,
+				Key:   redis.STREAM_RETENTION_BUCKET_KEY,
 			}, logger)
-			// retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "size", Rule: sizeRetentionPolicy})
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
 
+			// Create broker
 			b := broker.New(&broker.Options{
 				Ctx:    ctx,
 				Port:   cfg.Port,
@@ -105,6 +116,13 @@ func NewStartCmd() *cobra.Command {
 			go func() {
 				if err := b.Start(); err != nil {
 					logger.Fatal("Error starting broker", zap.Error(err))
+					cancel()
+				}
+			}()
+
+			go func() {
+				if err := storageManager.Start(); err != nil {
+					logger.Fatal("Error starting storage manager", zap.Error(err))
 					cancel()
 				}
 			}()

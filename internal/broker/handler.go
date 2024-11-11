@@ -24,9 +24,8 @@ func NewRPCHandler(svc redis.RedisStreamServiceContract, logger logging.LoggerCo
 // Creates a new stream
 func (h *RPCHandler) CreateStream(ctx context.Context, req *brokerpb.CreateStreamRequest) (*brokerpb.CreateStreamResponse, error) {
 	err := h.Service.CreateStream(&redis.CreateStreamParameters{
-		Name:    req.StreamName,
-		MaxSize: req.RetentionOptions.MaxSize,
-		MaxAge:  req.RetentionOptions.MaxAge,
+		Name:   req.StreamName,
+		MaxAge: req.RetentionOptions.MaxAge,
 	})
 	if err != nil {
 		return &brokerpb.CreateStreamResponse{

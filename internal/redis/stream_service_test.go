@@ -17,9 +17,7 @@ func setupRedisStreamService() (*RedisStreamService, *MockRedisClient, *StreamMe
 	logger := testutils.NewMockLogger()
 	metadataService := NewStreamMetadataServiceMock()
 	retentionOptions := &config.RetentionConfig{
-		Policy:  "size",
-		MaxSize: 10000,
-		MaxAge:  "1h",
+		MaxAge: "1h",
 	}
 
 	service := NewRedisStreamService(&RedisStreamServiceOptions{
@@ -36,19 +34,17 @@ func TestRedisStreamService_CreateStream(t *testing.T) {
 	t.Run("CreateStream with valid parameters and size retention policy", func(t *testing.T) {
 		service, client, metadataService := setupRedisStreamService()
 		params := &CreateStreamParameters{
-			Name:            "test-stream",
-			MaxSize:         10000,
-			RetentionPolicy: "size",
+			Name:   "test-stream",
+			MaxAge: "1h",
 		}
 
 		metadataService.On("WriteStreamMetadata", mock.MatchedBy(func(value interface{}) bool {
 			streamMetadata, ok := value.(*StreamMetadata)
 			return ok &&
 				streamMetadata.Name == params.Name &&
-				streamMetadata.RetentionPolicy == params.RetentionPolicy &&
-				streamMetadata.MaxSize == params.MaxSize
+				streamMetadata.MaxAge == params.MaxAge
 		})).Return(nil)
-		metadataService.On("AddToRetentionBucket", params.Name, params.RetentionPolicy).Return(nil)
+		metadataService.On("AddToRetentionBucket", params.Name, STREAM_RETENTION_BUCKET_KEY).Return(nil)
 		client.On("XAdd", mock.Anything, mock.MatchedBy(func(args *rdb.XAddArgs) bool {
 			return args.Stream == params.Name
 		})).Return(&rdb.StringCmd{})
