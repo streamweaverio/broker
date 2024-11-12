@@ -26,6 +26,11 @@ func (m *MockRedisClient) XTrimMinID(ctx context.Context, stream string, minID s
 	return args.Get(0).(*rdb.IntCmd)
 }
 
+func (m *MockRedisClient) XRange(ctx context.Context, stream, start, stop string) *rdb.XMessageSliceCmd {
+	args := m.Called(ctx, stream, start, stop)
+	return args.Get(0).(*rdb.XMessageSliceCmd)
+}
+
 func (m *MockRedisClient) HSet(ctx context.Context, key string, values ...interface{}) *rdb.IntCmd {
 	args := m.Called(ctx, key, values)
 	return args.Get(0).(*rdb.IntCmd)
