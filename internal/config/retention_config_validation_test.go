@@ -11,16 +11,33 @@ type RetentionConfigTestCase struct {
 func TestRetentionConfig_Validate(t *testing.T) {
 	testCases := []RetentionConfigTestCase{
 		{
-			Name: "Valid time based retention configuration",
+			Name: "Valid retention configuration",
 			Value: RetentionConfig{
-				MaxAge: 3600000,
+				CleanupPolicy: "delete",
+				MaxAge:        3600000,
 			},
 			ExpectError: false,
 		},
 		{
-			Name: "Invalid time based retention configuration - native max age",
+			Name: "Invalid retention configuration - native max age",
 			Value: RetentionConfig{
-				MaxAge: -3600000,
+				CleanupPolicy: "delete",
+				MaxAge:        -3600000,
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "Invalid retention configuration - missing cleanup policy",
+			Value: RetentionConfig{
+				MaxAge: 3600000,
+			},
+			ExpectError: true,
+		},
+		{
+			Name: "Invalid retention configuration - invalid cleanup policy",
+			Value: RetentionConfig{
+				CleanupPolicy: "invalid",
+				MaxAge:        3600000,
 			},
 			ExpectError: true,
 		},
