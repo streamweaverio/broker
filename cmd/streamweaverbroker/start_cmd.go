@@ -61,9 +61,11 @@ func NewStartCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
+			metadataService := redis.NewStreamMetadataService(ctx, redisClient, logger)
+
 			redisStreamService := redis.NewRedisStreamService(&redis.RedisStreamServiceOptions{
 				Ctx:                    ctx,
-				MetadataService:        redis.NewStreamMetadataService(ctx, redisClient, logger),
+				MetadataService:        metadataService,
 				RedisClient:            redisClient,
 				GlobalRetentionOptions: cfg.Retention,
 			}, logger)
@@ -93,9 +95,10 @@ func NewStartCmd() *cobra.Command {
 			// Register retention policies
 			// Time Retention Policy (default)
 			timeRetentionPolicy := retention.NewTimeRetentionPolicy(&retention.TimeRetentionPolicyOpts{
-				Ctx:   ctx,
-				Redis: redisClient,
-				Key:   redis.STREAM_RETENTION_BUCKET_KEY,
+				Ctx:                   ctx,
+				StreamMetadataservice: metadataService,
+				Streamservice:         redisStreamService,
+				RegistryKey:           redis.STREAM_REGISTRY_KEY,
 			}, logger)
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
 
