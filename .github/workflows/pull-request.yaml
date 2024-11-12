@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - 'pkg/**'
+      - 'cmd/**'
+      - 'internal/**'
       - 'Dockerfile'
       - 'Makefile'
       - 'go.mod'
