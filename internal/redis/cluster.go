@@ -2,12 +2,15 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
 	"github.com/streamweaverio/broker/internal/logging"
+	"github.com/streamweaverio/broker/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -21,6 +24,76 @@ type ClusterClientOptions struct {
 	DB               int
 	MaxPingRetries   int
 	PingBackoffLimit int
+}
+
+type ClusterNodeInfo struct {
+	ID          string   `json:"id"`
+	Address     string   `json:"address"`
+	Hostname    string   `json:"hostname"`
+	Flags       []string `json:"flags"`
+	Master      string   `json:"master"`
+	PingSent    int64    `json:"ping_sent"`
+	PingRecv    int64    `json:"ping_recv"`
+	ConfigEpoch int64    `json:"config_epoch"`
+	LinkState   string   `json:"link_state"`
+	Slot        string   `json:"slot"`
+}
+
+type ClusterInfo struct {
+	Nodes []*ClusterNodeInfo
+}
+
+func GetClusterInfo(context context.Context, client *redis.ClusterClient) (*ClusterInfo, error) {
+	clusterInfo := &ClusterInfo{}
+
+	// Run the CLUSTER NODES command
+	result, err := client.Do(context, "CLUSTER", "NODES").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	nodesStr, ok := result.(string)
+	if !ok {
+		return nil, errors.New("unexpected type for CLUSTER NODES result")
+	}
+
+	// Parse each line of CLUSTER NODES output
+	for _, line := range strings.Split(nodesStr, "\n") {
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Split(line, " ")
+		if len(fields) < 8 {
+			return nil, fmt.Errorf("invalid CLUSTER NODES line format: %s", line)
+		}
+
+		// Parse the slot information
+		slot := ""
+		for _, field := range fields[8:] {
+			if strings.Contains(field, "-") || strings.Contains(field, "[") {
+				slot = field
+				break
+			}
+		}
+
+		nodeInfo := &ClusterNodeInfo{
+			ID:          fields[0],
+			Address:     fields[1],
+			Hostname:    strings.Split(fields[1], ":")[0],
+			Flags:       strings.Split(fields[2], ","),
+			Master:      fields[3],
+			PingSent:    utils.ParseInt64(fields[4]),
+			PingRecv:    utils.ParseInt64(fields[5]),
+			ConfigEpoch: utils.ParseInt64(fields[6]),
+			LinkState:   fields[7],
+			Slot:        slot,
+		}
+
+		clusterInfo.Nodes = append(clusterInfo.Nodes, nodeInfo)
+	}
+
+	return clusterInfo, nil
 }
 
 func NewClusterClient(opts *ClusterClientOptions, logger logging.LoggerContract) (*redis.ClusterClient, error) {
@@ -45,13 +118,12 @@ func NewClusterClient(opts *ClusterClientOptions, logger logging.LoggerContract)
 	logger.Info("Connecting to Redis cluster", zap.Strings("nodes", opts.Nodes))
 
 	client := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: opts.Nodes,
+		Addrs:    opts.Nodes,
+		Password: opts.Password,
 		NewClient: func(opt *redis.Options) *redis.Client {
-			if opts.Password != "" {
-				opt.Password = opts.Password
-			}
 			opt.DB = opts.DB
-			return redis.NewClient(opt)
+			client := redis.NewClient(opt)
+			return client
 		},
 	})
 
@@ -80,7 +152,16 @@ func NewClusterClient(opts *ClusterClientOptions, logger logging.LoggerContract)
 		return nil, lastError
 	}
 
-	logger.Info("Connected to Redis cluster")
+	logger.Info("Connected to Redis cluster, nodes:")
+
+	nodes, err := GetClusterInfo(opts.Ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, node := range nodes.Nodes {
+		logger.Info("Cluster node info", zap.String("id", node.ID), zap.String("address", node.Address), zap.String("hostname", node.Hostname), zap.Strings("flags", node.Flags), zap.String("master", node.Master), zap.Int64("ping_sent", node.PingSent), zap.Int64("ping_recv", node.PingRecv), zap.Int64("config_epoch", node.ConfigEpoch), zap.String("link_state", node.LinkState), zap.String("slot", node.Slot))
+	}
 
 	return client, nil
 }
