@@ -36,47 +36,38 @@ func NewStreamMetadataService(ctx context.Context, client RedisStreamClient, log
 func (s *StreamMetadataServiceImpl) WriteStreamMetadata(value *StreamMetadata) error {
 	streamHash := utils.HashString(value.Name)
 	key := fmt.Sprintf("%s%s", STREAM_META_DATA_PREFIX, streamHash)
-	s.Logger.Debug("Preparing to write stream metadata to Redis...", zap.String("key", key))
+	s.Logger.Debug("Writing stream metadata to Redis...", zap.String("key", key))
 
-	// Retrieve existing metadata
 	existingMetadata, err := s.Client.HGetAll(s.Ctx, key).Result()
 	if err != nil {
-		s.Logger.Error("Failed to retrieve existing stream metadata", zap.String("key", key), zap.Error(err))
 		return fmt.Errorf("failed to get stream metadata: %w", err)
 	}
 
-	s.Logger.Debug("Fetched existing metadata", zap.String("key", key), zap.Any("existingMetadata", existingMetadata))
-
-	// Update or set metadata fields
-	metadata := make(map[string]interface{})
-	if value.Name != "" && value.Name != existingMetadata["name"] {
-		metadata["name"] = value.Name
-	}
-	if value.CleanupPolicy != "" && value.CleanupPolicy != existingMetadata["cleanup_policy"] {
-		metadata["cleanup_policy"] = value.CleanupPolicy
+	metadata := map[string]interface{}{
+		"name":           value.Name,
+		"cleanup_policy": value.CleanupPolicy,
+		"max_age":        strconv.FormatInt(value.MaxAge, 10),
+		"updated_at":     strconv.FormatInt(time.Now().Unix(), 10),
 	}
 
-	metadata["max_age"] = strconv.FormatInt(value.MaxAge, 10)
-	metadata["updated_at"] = strconv.FormatInt(time.Now().Unix(), 10)
-	if existingMetadata["created_at"] == "" {
-		metadata["created_at"] = metadata["updated_at"]
+	if len(existingMetadata) == 0 {
+		metadata["created_at"] = strconv.FormatInt(value.CreatedAt, 10)
 	}
 
-	// Log the final metadata that will be written
-	s.Logger.Debug("Final metadata to write/update in Redis", zap.String("key", key), zap.Any("metadata", metadata))
-
-	// Write to Redis if metadata has values
-	if len(metadata) > 0 {
-		err = s.Client.HSet(s.Ctx, key, metadata).Err()
-		if err != nil {
-			s.Logger.Error("Failed to write stream metadata to Redis", zap.String("key", key), zap.Any("metadata", metadata), zap.Error(err))
-			return fmt.Errorf("failed to update stream metadata: %w", err)
-		}
-		s.Logger.Debug("Successfully updated stream metadata in Redis", zap.String("key", key), zap.Any("metadata", metadata))
-	} else {
-		s.Logger.Debug("No metadata changes detected, skipping write", zap.String("key", key))
+	// Convert map to key-value pairs
+	var hsetArgs []interface{}
+	for k, v := range metadata {
+		hsetArgs = append(hsetArgs, k, v)
 	}
 
+	// Call HSet with key-value pairs
+	err = s.Client.HSet(s.Ctx, key, hsetArgs...).Err()
+	if err != nil {
+		s.Logger.Error("Failed to write stream metadata to Redis", zap.String("key", key), zap.Any("metadata", metadata), zap.Error(err))
+		return fmt.Errorf("failed to update stream metadata: %w", err)
+	}
+
+	s.Logger.Debug("Successfully updated stream metadata in Redis", zap.String("key", key), zap.Any("metadata", metadata))
 	return nil
 }
 

@@ -34,17 +34,18 @@ func TestStreamMetadataImpl_WriteStreamMetadata(t *testing.T) {
 		svc, client := CreateTestSubject()
 		streamName := "test-stream"
 		streamMetadata := &StreamMetadata{
-			Name:      streamName,
-			MaxAge:    7200000,
-			CreatedAt: 1620000000,
+			Name:          streamName,
+			MaxAge:        7200000,
+			CleanupPolicy: "delete",
+			CreatedAt:     1620000000,
 		}
 
 		// Setup: Metadata exists in Redis
 		existingMetadata := map[string]string{
-			"name":             streamName,
-			"retention_policy": "time",
-			"max_age":          "3600000",
-			"created_at":       "1620000000",
+			"name":           streamName,
+			"cleanup_policy": "archive",
+			"max_age":        "3600000",
+			"created_at":     "1620000000",
 		}
 
 		// Mock the HGetAll call to simulate existing metadata retrieval
@@ -53,8 +54,10 @@ func TestStreamMetadataImpl_WriteStreamMetadata(t *testing.T) {
 		// Expect HSet to update the metadata
 		client.
 			On("HSet", mock.Anything, mock.MatchedBy(MetadataKeyMatcher(streamName)), mock.MatchedBy(func(value []interface{}) bool {
-				val, ok := value[0].(map[string]string)
-				return ok && val["name"] == streamMetadata.Name && val["max_age"] == fmt.Sprintf("%d", streamMetadata.MaxAge)
+				return len(value) == 8 &&
+					value[0] == "name" && value[1] == streamName &&
+					value[2] == "cleanup_policy" && value[3] == "delete" &&
+					value[4] == "max_age" && value[5] == "7200000"
 			})).
 			Return(redis.NewIntResult(1, nil))
 
