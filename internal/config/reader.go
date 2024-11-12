@@ -18,6 +18,10 @@ func ReadConfiguration(filepath string) (*StreamWeaverConfig, error) {
 			LogOutput: "console",
 			LogFormat: "text",
 		},
+		Retention: &RetentionConfig{
+			MaxAge:        604800000,
+			CleanupPolicy: "delete",
+		},
 	}
 
 	if !utils.FileExists(filepath) {
