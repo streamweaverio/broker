@@ -17,7 +17,27 @@ func (m *StreamMetadataServiceMock) WriteStreamMetadata(value *StreamMetadata) e
 	return args.Error(0)
 }
 
-func (m *StreamMetadataServiceMock) AddToRetentionBucket(streamName string, retentionPolicy string) error {
-	args := m.Called(streamName, retentionPolicy)
+func (m *StreamMetadataServiceMock) ReadStreamMetadata(streamName string) (*StreamMetadata, error) {
+	args := m.Called(streamName)
+	return args.Get(0).(*StreamMetadata), args.Error(1)
+}
+
+func (m *StreamMetadataServiceMock) AddToRegistry(streamName string) error {
+	args := m.Called(streamName)
 	return args.Error(0)
+}
+
+func (m *StreamMetadataServiceMock) AddToCleanupBucket(streamName string, bucketKey string) error {
+	args := m.Called(streamName, bucketKey)
+	return args.Error(0)
+}
+
+func (m *StreamMetadataServiceMock) ListStreams() ([]string, error) {
+	args := m.Called()
+	return args.Get(0).([]string), args.Error(1)
+}
+
+func (m *StreamMetadataServiceMock) GetStreamMetadata(streamName string) (*StreamMetadata, error) {
+	args := m.Called(streamName)
+	return args.Get(0).(*StreamMetadata), args.Error(1)
 }

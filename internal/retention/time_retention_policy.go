@@ -3,7 +3,6 @@ package retention
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/internal/redis"
@@ -12,30 +11,34 @@ import (
 )
 
 type TimeRetentionPolicy struct {
-	Ctx    context.Context
-	Key    string
-	Redis  redis.RedisStreamClient
-	Logger logging.LoggerContract
+	Ctx             context.Context
+	Metadataservice redis.StreamMetadataService
+	Streamservice   redis.RedisStreamService
+	Logger          logging.LoggerContract
+	RegistryKey     string
 }
 
 type TimeRetentionPolicyOpts struct {
-	Ctx   context.Context
-	Redis redis.RedisStreamClient
-	Key   string
+	Ctx                   context.Context
+	StreamMetadataservice redis.StreamMetadataService
+	Streamservice         redis.RedisStreamService
+	Redis                 redis.RedisStreamClient
+	RegistryKey           string
 }
 
 func NewTimeRetentionPolicy(opts *TimeRetentionPolicyOpts, logger logging.LoggerContract) *TimeRetentionPolicy {
 	return &TimeRetentionPolicy{
-		Ctx:    opts.Ctx,
-		Key:    opts.Key,
-		Redis:  opts.Redis,
-		Logger: logger,
+		Ctx:             opts.Ctx,
+		Metadataservice: opts.StreamMetadataservice,
+		Streamservice:   opts.Streamservice,
+		Logger:          logger,
+		RegistryKey:     opts.RegistryKey,
 	}
 }
 
 func (s *TimeRetentionPolicy) Enforce() error {
 	s.Logger.Debug("Retrieving affected streams...", zap.String("policy", "time"))
-	streams, err := s.GetStreams()
+	streams, err := s.Metadataservice.ListStreams()
 	if err != nil {
 		return err
 	}
@@ -47,75 +50,63 @@ func (s *TimeRetentionPolicy) Enforce() error {
 		s.Logger.Info("Applying time retention policy to stream...", zap.String("hash", stream))
 		err := s.ApplyPolicy(stream)
 		if err != nil {
-			s.Logger.Error("Failed to apply time retention policy to stream", zap.String("hash", stream), zap.Error(err))
+			s.Logger.Error("Failed to apply time retention policy to stream", zap.String("stream_hash", stream), zap.Error(err))
 			continue
 		}
 	}
-
 	return nil
 }
 
-func (s *TimeRetentionPolicy) GetStreams() ([]string, error) {
-	streams, err := s.Redis.SMembers(s.Ctx, s.Key).Result()
-	if err != nil {
-		return nil, err
-	}
-
-	return streams, nil
+func (s *TimeRetentionPolicy) ArchiveMessages(stream string, minID string) error {
+	return nil
 }
 
-func (s *TimeRetentionPolicy) GetStreamRetentionPolicy(stream string) (map[string]string, error) {
-	result, err := s.Redis.HGetAll(s.Ctx, fmt.Sprintf("%s%s", redis.STREAM_META_DATA_PREFIX, stream)).Result()
+// Deletes messages older than the minID from the stream
+func (s *TimeRetentionPolicy) DeleteMessages(stream string, minID string) error {
+	err := s.Streamservice.DeleteMessagesOlderThan(stream, minID)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to delete messages from stream %s: %w", stream, err)
 	}
-
-	if result == nil {
-		return nil, fmt.Errorf("stream %s not found", stream)
-	}
-
-	maxAge, ok := result["max_age"]
-	if !ok {
-		return nil, PolicyOptionNotSetError("max_age")
-	}
-
-	return map[string]string{
-		"max_age":     maxAge,
-		"stream_name": result["name"],
-	}, nil
+	return nil
 }
 
-func (s *TimeRetentionPolicy) CalculateMinID(maxAge string) string {
-	maxAgeInSeconds, err := utils.ParseTimeUnitString(maxAge)
-	if err != nil {
-		return ""
+func (s *TimeRetentionPolicy) DeleteAndArchiveMessages(stream string, minID string) error {
+	return nil
+}
+
+// Applies the cleanup policy to the stream
+func (s *TimeRetentionPolicy) ApplyCleanupPolicy(stream string, policy string, minID string) error {
+	switch policy {
+	case "delete":
+		s.Logger.Info("Deleting older messages from stream...", zap.String("stream", stream), zap.String("min_id", minID))
+		return s.DeleteMessages(stream, minID)
+	case "archive":
+		s.Logger.Info("Archiving older messages from stream...", zap.String("stream", stream), zap.String("min_id", minID))
+		return s.ArchiveMessages(stream, minID)
+	case "delete,archive":
+		s.Logger.Info("Deleting and archiving older messages from stream...", zap.String("stream", stream), zap.String("min_id", minID))
+		return s.DeleteAndArchiveMessages(stream, minID)
+	default:
+		return fmt.Errorf("unknown cleanup policy: %s", policy)
 	}
-
-	duration := time.Duration(maxAgeInSeconds) * time.Second
-	cutoffTimestamp := time.Now().Add(-duration).UnixMilli()
-	redisTimestamp := fmt.Sprintf("%d-0", cutoffTimestamp)
-
-	return redisTimestamp
 }
 
 func (s *TimeRetentionPolicy) ApplyPolicy(stream string) error {
-	policy, err := s.GetStreamRetentionPolicy(stream)
+	meta, err := s.Metadataservice.GetStreamMetadata(stream)
 	if err != nil {
 		return err
 	}
 
-	s.Logger.Info("Applying time retention policy to stream...", zap.String("name", policy["stream_name"]))
-	minID := s.CalculateMinID(policy["max_age"])
-	if minID == "" {
-		return fmt.Errorf("failed to calculate min ID for stream %s", policy["stream_name"])
-	}
-
-	// TODO: Persist messages to storage before trimming
-	count, err := s.Redis.XTrimMinID(context.TODO(), policy["stream_name"], minID).Result()
+	s.Logger.Info("Applying time retention policy to stream...", zap.String("name", meta.Name))
+	minID, err := utils.CalculateRedisStreamMinID(meta.MaxAge)
 	if err != nil {
-		return fmt.Errorf("failed to trim stream %s: %w", policy["stream_name"], err)
+		return fmt.Errorf("failed to calculate min ID for stream %s: %w", meta.Name, err)
 	}
 
-	s.Logger.Info("Applied time retention policy to stream", zap.String("name", policy["stream_name"]), zap.Int64("message_affected", count))
+	err = s.ApplyCleanupPolicy(meta.Name, meta.CleanupPolicy, minID)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

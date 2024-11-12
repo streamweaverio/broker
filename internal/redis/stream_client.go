@@ -10,6 +10,7 @@ type RedisStreamClient interface {
 	XAdd(ctx context.Context, args *rdb.XAddArgs) *rdb.StringCmd
 	XDel(ctx context.Context, stream string, ids ...string) *rdb.IntCmd
 	XTrimMinID(ctx context.Context, stream string, minID string) *rdb.IntCmd
+	XRange(ctx context.Context, stream, start, stop string) *rdb.XMessageSliceCmd
 	HSet(ctx context.Context, key string, values ...interface{}) *rdb.IntCmd
 	HSetNX(ctx context.Context, key, field string, value interface{}) *rdb.BoolCmd
 	HGetAll(ctx context.Context, key string) *rdb.MapStringStringCmd

@@ -12,24 +12,27 @@ import (
 )
 
 type CreateStreamParameters struct {
-	Name   string
-	MaxAge int64
+	Name          string
+	CleanupPolicy string
+	MaxAge        int64
 }
 
 type StreamMetadata struct {
-	Name      string
-	MaxAge    int64
-	CreatedAt int64
-	UpdatedAt int64
+	Name          string
+	MaxAge        int64
+	CleanupPolicy string
+	CreatedAt     int64
+	UpdatedAt     int64
 }
 
-type RedisStreamServiceContract interface {
+type RedisStreamService interface {
 	// Create a new Redis stream for prodcuing and consuming messages
 	CreateStream(params *CreateStreamParameters) error
+	DeleteMessagesOlderThan(streamName string, minId string) error
 }
 
 // Implements RedisStreamServiceContract
-type RedisStreamService struct {
+type RedisStreamServiceImpl struct {
 	Ctx                    context.Context
 	Client                 RedisStreamClient
 	StreamMetadataService  StreamMetadataService
@@ -44,8 +47,8 @@ type RedisStreamServiceOptions struct {
 	GlobalRetentionOptions *config.RetentionConfig
 }
 
-func NewRedisStreamService(opts *RedisStreamServiceOptions, logger logging.LoggerContract) *RedisStreamService {
-	return &RedisStreamService{
+func NewRedisStreamService(opts *RedisStreamServiceOptions, logger logging.LoggerContract) RedisStreamService {
+	return &RedisStreamServiceImpl{
 		Client:                 opts.RedisClient,
 		StreamMetadataService:  opts.MetadataService,
 		Logger:                 logger,
@@ -62,16 +65,32 @@ func (p *CreateStreamParameters) Validate() error {
 	return nil
 }
 
-func (s *RedisStreamService) CreateStream(params *CreateStreamParameters) error {
+func (s *RedisStreamServiceImpl) CreateStream(params *CreateStreamParameters) error {
 	s.Logger.Debug("Creating stream...", zap.String("name", params.Name))
+	var cleanupPolicyBucket string
 
 	if params.MaxAge == 0 {
 		params.MaxAge = s.GlobalRetentionOptions.MaxAge
 	}
 
+	if params.CleanupPolicy == "" {
+		params.CleanupPolicy = s.GlobalRetentionOptions.CleanupPolicy
+	}
+
 	err := params.Validate()
 	if err != nil {
 		return err
+	}
+
+	switch params.CleanupPolicy {
+	case "delete":
+		cleanupPolicyBucket = STREAM_CLEANUP_BUCKET_DELETE
+	case "archive":
+		cleanupPolicyBucket = STREAM_CLEANUP_BUCKET_ARCHIVE
+	case "delete,archive":
+		cleanupPolicyBucket = STREAM_CLEANUP_BUCKET_DELETE_ARCHIVE
+	default:
+		cleanupPolicyBucket = STREAM_CLEANUP_BUCKET_DELETE
 	}
 
 	args := &redis.XAddArgs{
@@ -85,19 +104,24 @@ func (s *RedisStreamService) CreateStream(params *CreateStreamParameters) error 
 		return fmt.Errorf("failed to create stream: %w", err)
 	}
 
+	err = s.StreamMetadataService.AddToRegistry(params.Name)
+	if err != nil {
+		return fmt.Errorf("failed to add stream to registry: %w", err)
+	}
+
 	err = s.StreamMetadataService.WriteStreamMetadata(&StreamMetadata{
-		Name:      params.Name,
-		MaxAge:    params.MaxAge,
-		CreatedAt: time.Now().Unix(),
+		Name:          params.Name,
+		MaxAge:        params.MaxAge,
+		CleanupPolicy: params.CleanupPolicy,
+		CreatedAt:     time.Now().Unix(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to write stream metadata: %w", err)
 	}
 
-	// Add the stream to the retention bucket
-	err = s.StreamMetadataService.AddToRetentionBucket(params.Name, STREAM_RETENTION_BUCKET_KEY)
+	err = s.StreamMetadataService.AddToCleanupBucket(params.Name, cleanupPolicyBucket)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to add stream to cleanup bucket: %w", err)
 	}
 
 	// Remove the dummy message used to create the stream
@@ -107,5 +131,13 @@ func (s *RedisStreamService) CreateStream(params *CreateStreamParameters) error 
 	}
 
 	s.Logger.Debug("Stream created", zap.String("name", params.Name))
+	return nil
+}
+
+func (s *RedisStreamServiceImpl) DeleteMessagesOlderThan(streamName string, minId string) error {
+	_, err := s.Client.XTrimMinID(s.Ctx, streamName, minId).Result()
+	if err != nil {
+		return fmt.Errorf("failed to delete messages from stream %s: %w", streamName, err)
+	}
 	return nil
 }
