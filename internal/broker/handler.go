@@ -10,11 +10,11 @@ import (
 
 type RPCHandler struct {
 	Logger  logging.LoggerContract
-	Service redis.RedisStreamServiceContract
+	Service redis.RedisStreamService
 	brokerpb.UnimplementedStreamWeaverBrokerServer
 }
 
-func NewRPCHandler(svc redis.RedisStreamServiceContract, logger logging.LoggerContract) *RPCHandler {
+func NewRPCHandler(svc redis.RedisStreamService, logger logging.LoggerContract) *RPCHandler {
 	return &RPCHandler{
 		Logger:  logger,
 		Service: svc,
