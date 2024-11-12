@@ -12,7 +12,7 @@ import (
 )
 
 // Helper function for setting up the service and mock client
-func setupRedisStreamService() (*RedisStreamService, *MockRedisClient, *StreamMetadataServiceMock) {
+func setupRedisStreamService() (RedisStreamService, *MockRedisClient, *StreamMetadataServiceMock) {
 	client := &MockRedisClient{}
 	logger := testutils.NewMockLogger()
 	metadataService := NewStreamMetadataServiceMock()
