@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/streamweaverio/broker/internal/broker"
@@ -74,12 +75,27 @@ func NewStartCmd() *cobra.Command {
 			// RPC Handler for broker
 			rpcHandler := broker.NewRPCHandler(redisStreamService, logger)
 
+			// Storage Driver
+			storageDriver, err := storage.NewStorageProviderDriver(cfg.Storage)
+			if err != nil {
+				logger.Fatal("Error creating storage driver", zap.Error(err))
+				os.Exit(1)
+			}
+
 			// Storage Manager
 			storageManager, err := storage.NewStorageManager(&storage.StorageManagerOpts{
+				QueueSize:      1000,
 				WorkerPoolSize: 5,
+				BackoffLimit:   time.Duration(60) * time.Second,
+				MaxRetries:     3,
 			}, logger)
 			if err != nil {
 				logger.Fatal("Error creating storage manager", zap.Error(err))
+				os.Exit(1)
+			}
+
+			if err := storageManager.RegisterDriver(cfg.Storage.Provider, storageDriver); err != nil {
+				logger.Fatal("Error registering storage driver", zap.Error(err))
 				os.Exit(1)
 			}
 
@@ -99,6 +115,7 @@ func NewStartCmd() *cobra.Command {
 				StreamMetadataservice: metadataService,
 				Streamservice:         redisStreamService,
 				RegistryKey:           redis.STREAM_REGISTRY_KEY,
+				StorageManager:        storageManager,
 			}, logger)
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
 
@@ -143,6 +160,7 @@ func NewStartCmd() *cobra.Command {
 
 			b.Stop()
 			retentionManager.Stop()
+			storageManager.Stop(ctx)
 
 			if err := process.RemovePIDFile(processPIDFile); err != nil {
 				logger.Error("Error removing PID file", zap.Error(err))
