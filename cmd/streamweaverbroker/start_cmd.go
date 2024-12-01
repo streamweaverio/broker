@@ -160,7 +160,11 @@ func NewStartCmd() *cobra.Command {
 
 			b.Stop()
 			retentionManager.Stop()
-			storageManager.Stop(ctx)
+
+			err = storageManager.Stop(ctx)
+			if err != nil {
+				logger.Error("Error stopping storage manager", zap.Error(err))
+			}
 
 			if err := process.RemovePIDFile(processPIDFile); err != nil {
 				logger.Error("Error removing PID file", zap.Error(err))
