@@ -26,9 +26,14 @@ type StreamMetadata struct {
 }
 
 type RedisStreamService interface {
-	// Create a new Redis stream for prodcuing and consuming messages
+	// Create a new Redis stream for producing and consuming messages
 	CreateStream(params *CreateStreamParameters) error
+	// Count messages older than a given ID in a stream
+	CountMessagesOlderThan(streamName string, minId string) (int64, error)
+	// Delete messages older than a given ID from a stream
 	DeleteMessagesOlderThan(streamName string, minId string) error
+	// Get messages older than a given ID from a stream
+	GetMessagesOlderThan(streamName string, minId string, count int64) ([]redis.XMessage, error)
 }
 
 // Implements RedisStreamServiceContract
@@ -134,10 +139,63 @@ func (s *RedisStreamServiceImpl) CreateStream(params *CreateStreamParameters) er
 	return nil
 }
 
+func (s *RedisStreamServiceImpl) CountMessagesOlderThan(streamName string, minId string) (int64, error) {
+	info, err := s.Client.XInfoStream(s.Ctx, streamName).Result()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get stream info for %s: %w", streamName, err)
+	}
+
+	if minId >= info.FirstEntry.ID {
+		return 0, nil
+	}
+
+	var count int64
+	var lastId = "-" // Start from the beginning of the stream
+	batchSize := int64(1000)
+
+	for {
+		messages, err := s.Client.XRangeN(s.Ctx, streamName, lastId, minId, batchSize).Result()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get messages from stream %s: %w", streamName, err)
+		}
+
+		if len(messages) == 0 {
+			break
+		}
+
+		// Count messages older than minId
+		for _, msg := range messages {
+			if msg.ID >= minId {
+				break
+			}
+			count++
+		}
+
+		// If we got less than batch size or last message ID is >= minId, we're done
+		if len(messages) < int(batchSize) || messages[len(messages)-1].ID >= minId {
+			break
+		}
+
+		// Update lastID for next batch
+		lastId = messages[len(messages)-1].ID
+	}
+
+	return count, nil
+}
+
 func (s *RedisStreamServiceImpl) DeleteMessagesOlderThan(streamName string, minId string) error {
 	_, err := s.Client.XTrimMinID(s.Ctx, streamName, minId).Result()
 	if err != nil {
 		return fmt.Errorf("failed to delete messages from stream %s: %w", streamName, err)
 	}
 	return nil
+}
+
+func (s *RedisStreamServiceImpl) GetMessagesOlderThan(streamName string, minId string, count int64) ([]redis.XMessage, error) {
+	// Use "-" to start from beginning, and minId as the end (exclusive)
+	messages, err := s.Client.XRangeN(s.Ctx, streamName, "-", minId, count).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages from stream %s: %w", streamName, err)
+	}
+	return messages, nil
 }
