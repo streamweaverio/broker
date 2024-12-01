@@ -3,9 +3,11 @@ package storage
 import (
 	"fmt"
 	"os"
+
+	"github.com/redis/go-redis/v9"
 )
 
-type LocalFilesystemDriver struct {
+type LocalFSDriver struct {
 	Directory string
 }
 
@@ -21,13 +23,17 @@ func InitDirectory(dir string) error {
 	return nil
 }
 
-func NewLocalFilesystemDriver(directory string) (*LocalFilesystemDriver, error) {
+func NewLocalFilesystemDriver(directory string) (*LocalFSDriver, error) {
 	err := InitDirectory(directory)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LocalFilesystemDriver{
+	return &LocalFSDriver{
 		Directory: directory,
 	}, nil
+}
+
+func (l *LocalFSDriver) Write(streamName string, messages []redis.XMessage, meta *ArchiveMetadata) error {
+	return nil
 }
