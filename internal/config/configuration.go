@@ -55,6 +55,8 @@ type AWSS3StorageProviderConfig struct {
 type RetentionConfig struct {
 	// maximum age in milliseconds of a message before its moved to storage
 	MaxAge int64 `yaml:"max_age"`
+	// cleanup policy for streams; either "delete" or "archive" or "delete,archive"
+	CleanupPolicy string `yaml:"cleanup_policy"`
 }
 
 type LoggingConfig struct {

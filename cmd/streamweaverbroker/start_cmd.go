@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/streamweaverio/broker/internal/broker"
@@ -61,9 +62,11 @@ func NewStartCmd() *cobra.Command {
 				os.Exit(1)
 			}
 
+			metadataService := redis.NewStreamMetadataService(ctx, redisClient, logger)
+
 			redisStreamService := redis.NewRedisStreamService(&redis.RedisStreamServiceOptions{
 				Ctx:                    ctx,
-				MetadataService:        redis.NewStreamMetadataService(ctx, redisClient, logger),
+				MetadataService:        metadataService,
 				RedisClient:            redisClient,
 				GlobalRetentionOptions: cfg.Retention,
 			}, logger)
@@ -72,12 +75,27 @@ func NewStartCmd() *cobra.Command {
 			// RPC Handler for broker
 			rpcHandler := broker.NewRPCHandler(redisStreamService, logger)
 
+			// Storage Driver
+			storageDriver, err := storage.NewStorageProviderDriver(cfg.Storage)
+			if err != nil {
+				logger.Fatal("Error creating storage driver", zap.Error(err))
+				os.Exit(1)
+			}
+
 			// Storage Manager
 			storageManager, err := storage.NewStorageManager(&storage.StorageManagerOpts{
+				QueueSize:      1000,
 				WorkerPoolSize: 5,
+				BackoffLimit:   time.Duration(60) * time.Second,
+				MaxRetries:     3,
 			}, logger)
 			if err != nil {
 				logger.Fatal("Error creating storage manager", zap.Error(err))
+				os.Exit(1)
+			}
+
+			if err := storageManager.RegisterDriver(cfg.Storage.Provider, storageDriver); err != nil {
+				logger.Fatal("Error registering storage driver", zap.Error(err))
 				os.Exit(1)
 			}
 
@@ -93,9 +111,11 @@ func NewStartCmd() *cobra.Command {
 			// Register retention policies
 			// Time Retention Policy (default)
 			timeRetentionPolicy := retention.NewTimeRetentionPolicy(&retention.TimeRetentionPolicyOpts{
-				Ctx:   ctx,
-				Redis: redisClient,
-				Key:   redis.STREAM_RETENTION_BUCKET_KEY,
+				Ctx:                   ctx,
+				StreamMetadataservice: metadataService,
+				Streamservice:         redisStreamService,
+				RegistryKey:           redis.STREAM_REGISTRY_KEY,
+				StorageManager:        storageManager,
 			}, logger)
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
 
@@ -140,6 +160,11 @@ func NewStartCmd() *cobra.Command {
 
 			b.Stop()
 			retentionManager.Stop()
+
+			err = storageManager.Stop(ctx)
+			if err != nil {
+				logger.Error("Error stopping storage manager", zap.Error(err))
+			}
 
 			if err := process.RemovePIDFile(processPIDFile); err != nil {
 				logger.Error("Error removing PID file", zap.Error(err))

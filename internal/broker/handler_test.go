@@ -11,19 +11,9 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type MockRedisStreamService struct {
-	mock.Mock
-}
-
-func (s *MockRedisStreamService) CreateStream(params *redis.CreateStreamParameters) error {
-	// fmt.Printf("CreateStream called with params: %+v\n", params)
-	args := s.Called(params)
-	return args.Error(0)
-}
-
 func TestRPCHandler_CreateStream(t *testing.T) {
 	logger := testutils.NewMockLogger()
-	svc := &MockRedisStreamService{}
+	svc := redis.NewRedisStreamServiceMock()
 	handler := NewRPCHandler(svc, logger)
 
 	ctx := context.Background()

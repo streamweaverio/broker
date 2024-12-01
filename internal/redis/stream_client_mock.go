@@ -21,9 +21,24 @@ func (m *MockRedisClient) XDel(ctx context.Context, stream string, ids ...string
 	return args.Get(0).(*rdb.IntCmd)
 }
 
+func (m *MockRedisClient) XInfoStream(ctx context.Context, stream string) *rdb.XInfoStreamCmd {
+	args := m.Called(ctx, stream)
+	return args.Get(0).(*rdb.XInfoStreamCmd)
+}
+
 func (m *MockRedisClient) XTrimMinID(ctx context.Context, stream string, minID string) *rdb.IntCmd {
 	args := m.Called(ctx, stream, minID)
 	return args.Get(0).(*rdb.IntCmd)
+}
+
+func (m *MockRedisClient) XRange(ctx context.Context, stream, start, stop string) *rdb.XMessageSliceCmd {
+	args := m.Called(ctx, stream, start, stop)
+	return args.Get(0).(*rdb.XMessageSliceCmd)
+}
+
+func (m *MockRedisClient) XRangeN(ctx context.Context, stream, start, stop string, count int64) *rdb.XMessageSliceCmd {
+	args := m.Called(ctx, stream, start, stop, count)
+	return args.Get(0).(*rdb.XMessageSliceCmd)
 }
 
 func (m *MockRedisClient) HSet(ctx context.Context, key string, values ...interface{}) *rdb.IntCmd {

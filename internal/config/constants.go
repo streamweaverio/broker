@@ -6,4 +6,4 @@ var VALID_LOG_FORMATS = []string{"text", "json"}
 
 var VALID_STORAGE_PROVIDERS = []string{"local", "s3"}
 
-var VALID_RETENTION_POLICIES = []string{"size", "time"}
+var VALID_CLEANUP_POLICIES = []string{"delete", "archive", "delete,archive"}
