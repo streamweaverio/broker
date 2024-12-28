@@ -1,12 +1,12 @@
 module github.com/streamweaverio/broker
 
-go 1.23.2
+go 1.23.3
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/spf13/cobra v1.8.1
-	github.com/streamweaverio/go-protos v0.1.0
+	github.com/streamweaverio/go-protos v0.1.1-0.20241201183033-4aff35648e1f
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.68.0
@@ -27,5 +27,5 @@ require (
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/text v0.18.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/protobuf v1.35.1 // indirect
+	google.golang.org/protobuf v1.35.2 // indirect
 )

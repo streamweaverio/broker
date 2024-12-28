@@ -25,6 +25,13 @@ type StreamMetadata struct {
 	UpdatedAt     int64
 }
 
+type StreamPublishResult struct {
+	MessageIds []string
+	Published  int
+	Failed     int
+	Errors     []error
+}
+
 type RedisStreamService interface {
 	// Create a new Redis stream for producing and consuming messages
 	CreateStream(params *CreateStreamParameters) error
@@ -34,6 +41,8 @@ type RedisStreamService interface {
 	DeleteMessagesOlderThan(streamName string, minId string) error
 	// Get messages older than a given ID from a stream
 	GetMessagesOlderThan(streamName string, minId string, count int64) ([]redis.XMessage, error)
+	// Publish messages to a stream
+	PublishMessages(streamName string, messages [][]byte) (*StreamPublishResult, error)
 }
 
 // Implements RedisStreamServiceContract
@@ -68,6 +77,36 @@ func (p *CreateStreamParameters) Validate() error {
 	}
 
 	return nil
+}
+
+func (r *StreamPublishResult) IncrementPublished() {
+	r.Published++
+}
+
+func (r *StreamPublishResult) IncrementFailed() {
+	r.Failed++
+}
+
+func (r *StreamPublishResult) AddMessageId(id string) {
+	r.MessageIds = append(r.MessageIds, id)
+}
+
+func (r *StreamPublishResult) AddError(err error) {
+	r.Errors = append(r.Errors, err)
+}
+
+func (s *RedisStreamServiceImpl) StreamExists(streamName string) (bool, error) {
+	_, err := s.Client.XInfoStream(s.Ctx, streamName).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return false, nil
+		}
+
+		if err.Error() == "ERR no such key" {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (s *RedisStreamServiceImpl) CreateStream(params *CreateStreamParameters) error {
@@ -198,4 +237,46 @@ func (s *RedisStreamServiceImpl) GetMessagesOlderThan(streamName string, minId s
 		return nil, fmt.Errorf("failed to get messages from stream %s: %w", streamName, err)
 	}
 	return messages, nil
+}
+
+// Publish messages to a stream
+func (s *RedisStreamServiceImpl) PublishMessages(streamName string, messages [][]byte) (*StreamPublishResult, error) {
+	result := StreamPublishResult{
+		MessageIds: make([]string, 0),
+		Published:  0,
+		Failed:     0,
+		Errors:     make([]error, 0),
+	}
+	// Check if stream exists
+	exists, err := s.StreamExists(streamName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if stream exists: %w", err)
+	}
+
+	if !exists {
+		return nil, StreamNotFoundError(streamName)
+	}
+
+	messagesToPublish := ByteSliceToRedisMessageMapSlice(messages)
+
+	for _, message := range messagesToPublish {
+		args := &redis.XAddArgs{
+			Stream: streamName,
+			Values: message,
+		}
+
+		id, err := s.Client.XAdd(s.Ctx, args).Result()
+		if err != nil {
+			streamPublishError := StreamPublishError(err)
+			result.IncrementFailed()
+			result.AddError(streamPublishError)
+			continue
+		}
+
+		result.IncrementPublished()
+
+		result.AddMessageId(id)
+	}
+
+	return &result, nil
 }
