@@ -6,6 +6,8 @@ import (
 	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/internal/redis"
 	brokerpb "github.com/streamweaverio/go-protos/broker"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type RPCHandler struct {
@@ -35,4 +37,29 @@ func (h *RPCHandler) CreateStream(ctx context.Context, req *brokerpb.CreateStrea
 	}
 
 	return &brokerpb.CreateStreamResponse{Status: "OK"}, nil
+}
+
+func (h *RPCHandler) Publish(ctx context.Context, req *brokerpb.PublishRequest) (*brokerpb.PublishResponse, error) {
+	// Prepare messages
+	messages := make([][]byte, len(req.Messages))
+	for i, msg := range req.Messages {
+		messages[i] = msg.MessageContent
+	}
+
+	// Publish messages
+	result, err := h.Service.PublishMessages(req.StreamName, messages)
+	if err != nil {
+		switch err.(type) {
+		case *redis.RedisStreamNotFoundError:
+			return nil, status.Error(codes.NotFound, err.Error())
+		default:
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	}
+
+	// All messages published successfully
+	return &brokerpb.PublishResponse{
+		Status:     "OK",
+		MessageIds: result.MessageIds,
+	}, nil
 }
