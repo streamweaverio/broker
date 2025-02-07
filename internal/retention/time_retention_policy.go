@@ -12,7 +12,7 @@ import (
 )
 
 type TimeRetentionPolicy struct {
-	Ctx              context.Context
+	CancelCtx        context.Context
 	Metadataservice  redis.StreamMetadataService
 	Streamservice    redis.RedisStreamService
 	StorageManager   storage.StorageManager
@@ -22,7 +22,8 @@ type TimeRetentionPolicy struct {
 }
 
 type TimeRetentionPolicyOpts struct {
-	Ctx                   context.Context
+	// Cancel context to allow for cancellation of the retention policy
+	CancelCtx             context.Context
 	StreamMetadataservice redis.StreamMetadataService
 	Streamservice         redis.RedisStreamService
 	Redis                 redis.RedisStreamClient
@@ -37,7 +38,7 @@ func NewTimeRetentionPolicy(opts *TimeRetentionPolicyOpts, logger logging.Logger
 	}
 
 	return &TimeRetentionPolicy{
-		Ctx:              opts.Ctx,
+		CancelCtx:        opts.CancelCtx,
 		Metadataservice:  opts.StreamMetadataservice,
 		Streamservice:    opts.Streamservice,
 		Logger:           logger,
@@ -81,48 +82,56 @@ func (s *TimeRetentionPolicy) ArchiveMessages(stream string, minID string) error
 		return nil
 	}
 
-	s.Logger.Info("Starting message archival",
-		zap.String("stream", stream),
-		zap.Int64("affected_messages", affectedMsgCount))
+	s.Logger.Debug(fmt.Sprintf("stream: %s has %d messages to archive", stream, affectedMsgCount))
 
-	var processedCount int64
-	lastID := "-" // Start from beginning of stream
-
-	for processedCount < affectedMsgCount {
-		// Get batch of messages
-		messages, err := s.Streamservice.GetMessagesOlderThan(stream, lastID, s.MessageBatchSize)
+	if affectedMsgCount < s.MessageBatchSize {
+		s.Logger.Debug("Message count is less than batch size, archiving all messages in one go", zap.String("stream", stream), zap.Int64("count", affectedMsgCount))
+		// Archive all messages in one go
+		messages, err := s.Streamservice.GetMessagesOlderThan(stream, minID, s.MessageBatchSize)
 		if err != nil {
 			return fmt.Errorf("failed to get messages from stream %s: %w", stream, err)
 		}
 
-		if len(messages) == 0 {
-			break // No more messages to process
-		}
-
-		// Archive batch
-		err = s.StorageManager.ArchiveMessages(s.Ctx, stream, messages)
+		err = s.StorageManager.ArchiveMessages(s.CancelCtx, stream, messages)
 		if err != nil {
 			return fmt.Errorf("failed to archive messages: %w", err)
 		}
+	} else {
+		batchCount := affectedMsgCount / s.MessageBatchSize
+		remainder := affectedMsgCount % s.MessageBatchSize
 
-		processedCount += int64(len(messages))
-		lastID = messages[len(messages)-1].ID // Update last processed ID
+		if remainder > 0 {
+			batchCount++
+		}
 
-		s.Logger.Debug("Archived batch of messages",
+		s.Logger.Debug("Archiving messages in batches",
 			zap.String("stream", stream),
-			zap.Int("batch_size", len(messages)),
-			zap.Int64("total_processed", processedCount),
-			zap.Int64("total_affected", affectedMsgCount))
+			zap.Int64("affected_messages", affectedMsgCount),
+			zap.Int64("batch_size", s.MessageBatchSize),
+			zap.Int64("batch_count", batchCount))
 
-		// Break if we've reached or exceeded minID
-		if lastID >= minID {
-			break
+		var currentMinId = minID
+
+		for i := int64(0); i < batchCount; i++ {
+			s.Logger.Debug("Processing message batch", zap.Int64("batch", i+1))
+			// Get messages for batch
+			messages, err := s.Streamservice.GetMessagesOlderThan(stream, currentMinId, s.MessageBatchSize)
+			if err != nil {
+				s.Logger.Error("Failed to get messages from stream", zap.String("stream", stream), zap.Error(err))
+				continue
+			}
+
+			// Set new minID for next batch
+			currentMinId = messages[len(messages)-1].ID
+
+			// Add to archive processing queue
+			err = s.StorageManager.ArchiveMessages(s.CancelCtx, stream, messages)
+			if err != nil {
+				s.Logger.Error("Failed to archive messages", zap.String("stream", stream), zap.Error(err))
+				continue
+			}
 		}
 	}
-
-	s.Logger.Info("Completed message archival",
-		zap.String("stream", stream),
-		zap.Int64("archived_messages", processedCount))
 
 	return nil
 }
