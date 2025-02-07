@@ -111,7 +111,7 @@ func NewStartCmd() *cobra.Command {
 			// Register retention policies
 			// Time Retention Policy (default)
 			timeRetentionPolicy := retention.NewTimeRetentionPolicy(&retention.TimeRetentionPolicyOpts{
-				Ctx:                   ctx,
+				CancelCtx:             ctx,
 				StreamMetadataservice: metadataService,
 				Streamservice:         redisStreamService,
 				RegistryKey:           redis.STREAM_REGISTRY_KEY,
