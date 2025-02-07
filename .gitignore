@@ -1,4 +1,6 @@
 bin
 logs
 outputs
+.goose
+.DS_Store
 streamweaverbroker.pid
