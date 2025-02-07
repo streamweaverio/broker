@@ -28,9 +28,11 @@ type RedisHostConfig struct {
 
 type StorageConfig struct {
 	// provider of the storage; either "local" or "aws_s3"
-	Provider string                      `yaml:"provider"`
-	Local    *LocalStorageProviderConfig `yaml:"local"`
-	S3       *AWSS3StorageProviderConfig `yaml:"s3"`
+	Provider string `yaml:"provider"`
+	// configuration for the local storage provider
+	Local *LocalStorageProviderConfig `yaml:"local"`
+	// configuration for the AWS s3 storage provider
+	S3 *AWSS3StorageProviderConfig `yaml:"s3"`
 }
 
 // represents the configuration for the local storage provider
