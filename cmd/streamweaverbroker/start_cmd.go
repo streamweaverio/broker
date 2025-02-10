@@ -105,6 +105,7 @@ func NewStartCmd() *cobra.Command {
 				Streamservice:         redisStreamService,
 				RegistryKey:           redis.STREAM_REGISTRY_KEY,
 				Archiver:              archiver,
+				MessageBatchSize:      10000,
 			}, logger)
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
 
