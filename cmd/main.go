@@ -10,7 +10,8 @@ import (
 
 func main() {
 	startCmd := streamweaverbroker.NewStartCmd()
-	rootCmd := streamweaverbroker.NewBaseCommand([]*cobra.Command{startCmd})
+	simulateCmd := streamweaverbroker.NewSimulateCmd()
+	rootCmd := streamweaverbroker.NewBaseCommand([]*cobra.Command{startCmd, simulateCmd})
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
