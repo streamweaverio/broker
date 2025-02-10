@@ -132,9 +132,13 @@ func (a *ArchiverImpl) SerializeToParquet(messages []rdb.XMessage, meta *block.B
 			}
 
 			if err = pw.Write(record); err != nil {
-				pw.WriteStop()
 				a.Logger.Error("Failed to write record to Parquet", zap.Error(err))
 				w.CloseWithError(fmt.Errorf("failed to write record to Parquet: %w", err))
+
+				if err = pw.WriteStop(); err != nil {
+					a.Logger.Error("Failed to close Parquet writer", zap.Error(err))
+				}
+
 				return
 			}
 		}
