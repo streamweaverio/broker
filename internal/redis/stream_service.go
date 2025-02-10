@@ -244,7 +244,7 @@ func (s *RedisStreamServiceImpl) CountMessagesOlderThan(streamName string, minId
 			return 0, fmt.Errorf("failed to get timestamp from stream message ID: %w", err)
 		}
 
-		if len(messages) < batchSize || lastIdTimestamp >= minIdTimestamp {
+		if int64(len(messages)) < batchSize || lastIdTimestamp >= minIdTimestamp {
 			break
 		}
 
