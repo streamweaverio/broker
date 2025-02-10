@@ -28,8 +28,8 @@ func (m *RedisStreamServiceMock) DeleteMessagesOlderThan(streamName string, minI
 	return args.Error(0)
 }
 
-func (m *RedisStreamServiceMock) CountMessagesOlderThan(streamName string, minId string) (int64, error) {
-	args := m.Called(streamName, minId)
+func (m *RedisStreamServiceMock) CountMessagesOlderThan(streamName string, minId string, batchSize int64) (int64, error) {
+	args := m.Called(streamName, minId, batchSize)
 	return args.Get(0).(int64), args.Error(1)
 }
 

@@ -19,8 +19,8 @@ func ReadConfiguration(filepath string) (*StreamWeaverConfig, error) {
 			LogFormat: "text",
 		},
 		Retention: &RetentionConfig{
-			MaxAge:        604800000,
-			CleanupPolicy: "delete",
+			MaxAge:        1 * 24 * 60 * 60 * 1000, // 1 day in milliseconds
+			CleanupPolicy: "delete,archive",
 		},
 	}
 

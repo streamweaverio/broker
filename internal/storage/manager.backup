@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sync"
 	"time"
 
+	"github.com/alitto/pond/v2"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/redis/go-redis/v9"
 	"github.com/streamweaverio/broker/internal/logging"
@@ -27,13 +27,18 @@ type StorageManager interface {
 }
 
 type StorageManagerImpl struct {
-	Config   *StorageManagerOpts
-	Ctx      context.Context
-	Cancel   context.CancelFunc
-	Logger   logging.LoggerContract
-	Driver   StorageProviderDriver
-	TaskChan chan StorageTask
-	Workers  sync.WaitGroup
+	// Configuration for the storage manager
+	Config *StorageManagerOpts
+	// Context for the storage manager
+	Ctx context.Context
+	// Cancel function for the storage manager
+	Cancel context.CancelFunc
+	// Logger for the storage manager
+	Logger logging.LoggerContract
+	// Storage driver for writing and reading messages
+	Driver StorageProviderDriver
+	// Worker pool for executing storage tasks
+	Pool pond.Pool
 }
 
 type StorageTask struct {
@@ -43,10 +48,6 @@ type StorageTask struct {
 	StreamName string
 	// Messages to store
 	Messages []redis.XMessage
-	// Result channel to notify the caller
-	ResultChan chan error
-	// Number of retries for the operation
-	RetryCount int
 	// Metadata for the operation
 	Metadata *ArchiveMetadata
 	// Time when the operation was created
@@ -73,8 +74,6 @@ type StorageManagerOpts struct {
 	WorkerPoolSize int
 	// Maximum number of retries for storage operations
 	MaxRetries int
-	// Maximum number of messages to store in the queue
-	QueueSize int
 	// Backoff limit for storage operations
 	BackoffLimit time.Duration
 }
@@ -88,23 +87,35 @@ func NewStorageManager(opts *StorageManagerOpts, logger logging.LoggerContract) 
 		opts.MaxRetries = 3
 	}
 
-	if opts.QueueSize <= 0 {
-		opts.QueueSize = 1000
-	}
-
 	if opts.BackoffLimit <= 0 {
 		opts.BackoffLimit = 60 * time.Second
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create a new worker pool with the specified size and maximum queue capacity
+	pool := pond.NewPool(opts.WorkerPoolSize)
+
 	return &StorageManagerImpl{
-		Config:   opts,
-		Logger:   logger,
-		TaskChan: make(chan StorageTask, opts.QueueSize),
-		Ctx:      ctx,
-		Cancel:   cancel,
+		Config: opts,
+		Logger: logger,
+		Pool:   pool,
+		Ctx:    ctx,
+		Cancel: cancel,
 	}, nil
+}
+
+// Vaidate StorageTask
+func (t *StorageTask) Validate() error {
+	if t.Type == "" {
+		return fmt.Errorf("task type is empty")
+	}
+
+	if !slices.Contains([]string{"Write", "Read"}, t.Type) {
+		return fmt.Errorf("invalid task type: %s", t.Type)
+	}
+
+	return nil
 }
 
 func (s *StorageManagerImpl) RegisterDriver(name string, driver StorageProviderDriver) error {
@@ -130,13 +141,11 @@ func (s *StorageManagerImpl) ArchiveMessages(ctx context.Context, streamName str
 		return fmt.Errorf("no storage driver registered")
 	}
 
-	resultChan := make(chan error, 1)
-	task := StorageTask{
+	// Create a new storage task for writing messages to the storage provider
+	storageTask := StorageTask{
 		Type:       "Write",
 		StreamName: streamName,
 		Messages:   messages,
-		ResultChan: resultChan,
-		RetryCount: s.Config.MaxRetries,
 		Metadata: &ArchiveMetadata{
 			StreamName:   streamName,
 			StartID:      messages[0].ID,
@@ -147,27 +156,76 @@ func (s *StorageManagerImpl) ArchiveMessages(ctx context.Context, streamName str
 		CreatedAt: time.Now(),
 	}
 
-	// Send operation to worker pool
-	select {
-	case s.TaskChan <- task:
-		s.Logger.Debug("Queued archive operation", zap.String("stream", streamName), zap.Int("message_count", len(messages)))
-	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while queueing archive operation")
-	default:
-		return fmt.Errorf("storage operation queue is full")
+	// Submit the storage task to the worker pool
+	task := s.Pool.SubmitErr(func() error {
+		return s.ExecuteStorageTask(storageTask)
+	})
+
+	// Wait for the task to complete
+	err := task.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to archive messages: %w", err)
 	}
 
-	// Wait for operation result
-	select {
-	case err := <-resultChan:
-		return err
-	case <-ctx.Done():
-		return fmt.Errorf("context cancelled while waiting for archive operation")
-	}
+	return nil
 }
 
 func (s *StorageManagerImpl) GetArchivedMessages(ctx context.Context, streamName string, startID, endID string) ([]redis.XMessage, error) {
 	return nil, nil
+}
+
+func (s *StorageManagerImpl) ExecuteWithRetry(operation func() error) error {
+	backoff := backoff.NewExponentialBackOff()
+	backoff.MaxElapsedTime = s.Config.BackoffLimit
+
+	var lastError error
+	attempts := 0
+
+	for attempts < s.Config.MaxRetries {
+		err := operation()
+		if err == nil {
+			return nil
+		}
+
+		lastError = err
+		attempts++
+		nextRetryTime := time.Now().Add(backoff.NextBackOff())
+		s.Logger.Error("Operation failed",
+			zap.Error(err),
+			zap.Time("next_retry_at", nextRetryTime),
+			zap.Int("attempt", attempts),
+			zap.Int("max_attempts", s.Config.MaxRetries))
+
+		if attempts >= s.Config.MaxRetries {
+			break
+		}
+
+		backoffDuration := backoff.NextBackOff()
+		s.Logger.Info("Retrying operation",
+			zap.Int("attempt", attempts),
+			zap.Duration("backoff_duration", backoffDuration))
+		time.Sleep(backoffDuration)
+	}
+
+	return fmt.Errorf("operation failed after %d attempts: %w", attempts, lastError)
+}
+
+func (s *StorageManagerImpl) ExecuteStorageTask(task StorageTask) error {
+	err := task.Validate()
+	if err != nil {
+		return fmt.Errorf("invalid storage task: %w", err)
+	}
+
+	switch task.Type {
+	case "Write":
+		return s.ExecuteWithRetry(func() error {
+			return s.Driver.Write(task.StreamName, task.Messages, task.Metadata)
+		})
+	case "Read":
+		return fmt.Errorf("read operation not implemented")
+	}
+
+	return nil
 }
 
 func (s *StorageManagerImpl) Start() error {
@@ -175,89 +233,7 @@ func (s *StorageManagerImpl) Start() error {
 		return fmt.Errorf("no storage driver registered")
 	}
 
-	s.Logger.Info("Starting storage manager...", zap.Int("worker_pool_size", s.Config.WorkerPoolSize), zap.Int("queue_size", s.Config.QueueSize))
-
-	for i := 0; i < s.Config.WorkerPoolSize; i++ {
-		s.Workers.Add(1)
-		go s.Process(i)
-	}
-	return nil
-}
-
-// Worker function to process storage operations
-func (s *StorageManagerImpl) Process(id int) {
-	defer s.Workers.Done()
-	s.Logger.Info("Starting worker...", zap.Int("id", id))
-
-	for {
-		select {
-		case <-s.Ctx.Done():
-			s.Logger.Info("Stopping worker...", zap.Int("id", id))
-			return
-		case task := <-s.TaskChan:
-			err := s.ExcuteTask(task)
-			if err != nil {
-				s.Logger.Error("Failed to execute storage task", zap.Error(err), zap.String("type", task.Type), zap.String("stream", task.StreamName))
-			}
-			// Notify the caller about the result
-			if task.ResultChan != nil {
-				task.ResultChan <- err
-			}
-		}
-	}
-}
-
-func (s *StorageManagerImpl) ExcuteTask(task StorageTask) error {
-	if task.Type == "" {
-		return fmt.Errorf("task type is empty")
-	}
-
-	if !slices.Contains([]string{"Write", "Read"}, task.Type) {
-		return fmt.Errorf("invalid task type: %s", task.Type)
-	}
-
-	backoff := backoff.NewExponentialBackOff()
-	backoff.MaxElapsedTime = s.Config.BackoffLimit
-
-	var lastError error
-	attempts := 0
-
-	switch task.Type {
-	case "Write":
-		for attempts < task.RetryCount {
-			err := s.Driver.Write(task.StreamName, task.Messages, task.Metadata)
-			if err == nil {
-				return nil
-			}
-
-			lastError = err
-			attempts++
-			nextRetryTime := time.Now().Add(backoff.NextBackOff())
-			s.Logger.Error("Failed to write messages to storage",
-				zap.Error(err),
-				zap.Time("next_retry_at", nextRetryTime),
-				zap.Int("attempt", attempts),
-				zap.Int("max_attempts", task.RetryCount))
-
-			if attempts >= task.RetryCount {
-				break
-			}
-
-			backoffDuration := backoff.NextBackOff()
-			s.Logger.Info("Retrying write operation",
-				zap.Int("attempt", attempts),
-				zap.Duration("backoff_duration", backoffDuration))
-			time.Sleep(backoffDuration)
-		}
-	case "Read":
-		// Implement read logic when needed
-		return fmt.Errorf("read operation not implemented")
-	}
-
-	if lastError != nil {
-		return fmt.Errorf("failed to execute task after %d attempts: %w",
-			attempts, lastError)
-	}
+	s.Logger.Info("Starting storage manager...", zap.Int("worker_pool_size", s.Config.WorkerPoolSize))
 
 	return nil
 }
@@ -266,14 +242,15 @@ func (s *StorageManagerImpl) Stop(ctx context.Context) error {
 	s.Logger.Info("Stopping storage manager...")
 	s.Cancel()
 
-	done := make(chan struct{})
+	// Stop accepting new tasks and wait for current tasks to complete
+	stopped := make(chan struct{})
 	go func() {
-		s.Workers.Wait()
-		close(done)
+		s.Pool.StopAndWait()
+		close(stopped)
 	}()
 
 	select {
-	case <-done:
+	case <-stopped:
 		s.Logger.Info("Storage manager stopped")
 		return nil
 	case <-ctx.Done():

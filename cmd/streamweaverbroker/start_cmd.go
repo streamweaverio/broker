@@ -6,14 +6,15 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/streamweaverio/broker/internal/archiver"
 	"github.com/streamweaverio/broker/internal/broker"
 	"github.com/streamweaverio/broker/internal/config"
 	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/internal/redis"
 	"github.com/streamweaverio/broker/internal/retention"
+	"github.com/streamweaverio/broker/internal/s3"
 	"github.com/streamweaverio/broker/internal/storage"
 	"github.com/streamweaverio/broker/pkg/process"
 	"go.uber.org/zap"
@@ -75,47 +76,36 @@ func NewStartCmd() *cobra.Command {
 			// RPC Handler for broker
 			rpcHandler := broker.NewRPCHandler(redisStreamService, logger)
 
-			// Storage Driver
-			storageDriver, err := storage.NewStorageProviderDriver(cfg.Storage)
+			// Create storage from storage config
+			storageDriver, err := GetStorage(cfg, logger)
 			if err != nil {
-				logger.Fatal("Error creating storage driver", zap.Error(err))
+				logger.Fatal("error creating storage", zap.Error(err))
 				os.Exit(1)
 			}
 
-			// Storage Manager
-			storageManager, err := storage.NewStorageManager(&storage.StorageManagerOpts{
-				QueueSize:      1000,
-				WorkerPoolSize: 5,
-				BackoffLimit:   time.Duration(60) * time.Second,
-				MaxRetries:     3,
+			// Create archiver instance with storage driver
+			archiver := archiver.New(&archiver.ArchiverOptions{
+				Storage: storageDriver,
 			}, logger)
-			if err != nil {
-				logger.Fatal("Error creating storage manager", zap.Error(err))
-				os.Exit(1)
-			}
-
-			if err := storageManager.RegisterDriver(cfg.Storage.Provider, storageDriver); err != nil {
-				logger.Fatal("Error registering storage driver", zap.Error(err))
-				os.Exit(1)
-			}
 
 			// Retention Manager
 			retentionManager, err := retention.NewRetentionManager(&retention.RetentionManagerOptions{
 				Interval: 30,
 			}, logger)
 			if err != nil {
-				logger.Fatal("Error creating retention manager", zap.Error(err))
+				logger.Fatal("error creating retention manager", zap.Error(err))
 				os.Exit(1)
 			}
 
 			// Register retention policies
 			// Time Retention Policy (default)
 			timeRetentionPolicy := retention.NewTimeRetentionPolicy(&retention.TimeRetentionPolicyOpts{
-				Ctx:                   ctx,
+				CancelCtx:             ctx,
 				StreamMetadataservice: metadataService,
 				Streamservice:         redisStreamService,
 				RegistryKey:           redis.STREAM_REGISTRY_KEY,
-				StorageManager:        storageManager,
+				Archiver:              archiver,
+				MessageBatchSize:      10000,
 			}, logger)
 			retentionManager.RegisterPolicy(&retention.RetentionPolicy{Name: "time", Rule: timeRetentionPolicy})
 
@@ -129,27 +119,20 @@ func NewStartCmd() *cobra.Command {
 			})
 
 			if err := process.CreatePIDFile(processPIDFile, os.Getpid()); err != nil {
-				logger.Fatal("Error creating PID file", zap.Error(err))
+				logger.Fatal("error creating PID file", zap.Error(err))
 				os.Exit(1)
 			}
 
 			go func() {
 				if err := b.Start(); err != nil {
-					logger.Fatal("Error starting broker", zap.Error(err))
-					cancel()
-				}
-			}()
-
-			go func() {
-				if err := storageManager.Start(); err != nil {
-					logger.Fatal("Error starting storage manager", zap.Error(err))
+					logger.Fatal("error starting broker", zap.Error(err))
 					cancel()
 				}
 			}()
 
 			go func() {
 				if err := retentionManager.Start(); err != nil {
-					logger.Fatal("Error starting retention manager", zap.Error(err))
+					logger.Fatal("error starting retention manager", zap.Error(err))
 					cancel()
 				}
 			}()
@@ -161,23 +144,42 @@ func NewStartCmd() *cobra.Command {
 			b.Stop()
 			retentionManager.Stop()
 
-			err = storageManager.Stop(ctx)
-			if err != nil {
-				logger.Error("Error stopping storage manager", zap.Error(err))
-			}
-
 			if err := process.RemovePIDFile(processPIDFile); err != nil {
-				logger.Error("Error removing PID file", zap.Error(err))
+				logger.Error("error removing PID file", zap.Error(err))
 				os.Exit(1)
 			}
 		},
 	}
 }
 
+// Create a list of redis node addresses
 func MakeRedisNodeAddresses(hosts []*config.RedisHostConfig) []string {
 	var nodes []string
 	for _, host := range hosts {
 		nodes = append(nodes, fmt.Sprintf("%s:%d", host.Host, host.Port))
 	}
 	return nodes
+}
+
+// Creates a storage manager
+func GetStorage(cfg *config.StreamWeaverConfig, logger logging.LoggerContract) (storage.Storage, error) {
+	if cfg.Storage.Provider == "s3" {
+		client, err := s3.NewClient(&s3.S3ClientOptions{
+			AccessKeyId:     cfg.Storage.S3.AccessKeyId,
+			AccessKeySecret: cfg.Storage.S3.SecretAccessKey,
+			Region:          cfg.Storage.S3.Region,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return storage.NewS3Storage(&storage.S3StorageOptions{
+			Client:     client,
+			BucketName: cfg.Storage.S3.Bucket,
+		}, logger)
+	} else if cfg.Storage.Provider == "local" {
+		return storage.NewLocalFilesystemDriver(cfg.Storage.Local.Directory)
+	}
+
+	return nil, fmt.Errorf("unknown storage provider: %s", cfg.Storage.Provider)
 }
