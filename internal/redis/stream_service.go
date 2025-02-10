@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/streamweaverio/broker/internal/config"
 	"github.com/streamweaverio/broker/internal/logging"
+	"github.com/streamweaverio/broker/pkg/utils"
 	"go.uber.org/zap"
 )
 
@@ -36,7 +37,7 @@ type RedisStreamService interface {
 	// Create a new Redis stream for producing and consuming messages
 	CreateStream(params *CreateStreamParameters) error
 	// Count messages older than a given ID in a stream
-	CountMessagesOlderThan(streamName string, minId string) (int64, error)
+	CountMessagesOlderThan(streamName string, minId string, batchSize int64) (int64, error)
 	// Delete messages older than a given ID from a stream
 	DeleteMessagesOlderThan(streamName string, minId string) error
 	// Get messages older than a given ID from a stream
@@ -178,19 +179,40 @@ func (s *RedisStreamServiceImpl) CreateStream(params *CreateStreamParameters) er
 	return nil
 }
 
-func (s *RedisStreamServiceImpl) CountMessagesOlderThan(streamName string, minId string) (int64, error) {
+func (s *RedisStreamServiceImpl) CountMessagesOlderThan(streamName string, minId string, batchSize int64) (int64, error) {
+	if streamName == "" {
+		return 0, fmt.Errorf("stream name cannot be empty")
+	}
+	if minId == "" {
+		return 0, fmt.Errorf("minId cannot be empty")
+	}
+
 	info, err := s.Client.XInfoStream(s.Ctx, streamName).Result()
 	if err != nil {
+		if err == redis.Nil || err.Error() == "ERR no such key" {
+			return 0, StreamNotFoundError(streamName)
+		}
 		return 0, fmt.Errorf("failed to get stream info for %s: %w", streamName, err)
 	}
 
-	if minId >= info.FirstEntry.ID {
-		return 0, nil
+	minIdTimestamp, err := utils.GetTimestampFromStreamMessageID(minId)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get timestamp from stream message ID: %w", err)
+	}
+
+	if info.FirstEntry.ID != "" {
+		firstEntryTimestamp, err := utils.GetTimestampFromStreamMessageID(info.FirstEntry.ID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get timestamp from stream message ID: %w", err)
+		}
+
+		if minIdTimestamp < firstEntryTimestamp {
+			return 0, nil
+		}
 	}
 
 	var count int64
-	var lastId = "-" // Start from the beginning of the stream
-	batchSize := int64(1000)
+	lastId := "-" // Start from the beginning
 
 	for {
 		messages, err := s.Client.XRangeN(s.Ctx, streamName, lastId, minId, batchSize).Result()
@@ -204,18 +226,28 @@ func (s *RedisStreamServiceImpl) CountMessagesOlderThan(streamName string, minId
 
 		// Count messages older than minId
 		for _, msg := range messages {
-			if msg.ID >= minId {
+			msgTimestamp, err := utils.GetTimestampFromStreamMessageID(msg.ID)
+			if err != nil {
+				return 0, fmt.Errorf("failed to get timestamp from stream message ID: %w", err)
+			}
+
+			if msgTimestamp >= minIdTimestamp {
 				break
 			}
 			count++
 		}
 
-		// If we got less than batch size or last message ID is >= minId, we're done
-		if len(messages) < int(batchSize) || messages[len(messages)-1].ID >= minId {
+		// Break conditions
+		lastId = messages[len(messages)-1].ID
+		lastIdTimestamp, err := utils.GetTimestampFromStreamMessageID(lastId)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get timestamp from stream message ID: %w", err)
+		}
+
+		if len(messages) < batchSize || lastIdTimestamp >= minIdTimestamp {
 			break
 		}
 
-		// Update lastID for next batch
 		lastId = messages[len(messages)-1].ID
 	}
 
