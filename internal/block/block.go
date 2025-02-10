@@ -34,10 +34,10 @@ type BlockMetadata struct {
 	// Size of the block's parquet file
 	ParquetFileSize int `json:"parquet_file_size"`
 	// Parquet file footer
-	ParquetFooter *parquet.FileMetaData
+	ParquetFooter *parquet.FileMetaData `json:"parquet_footer"`
 }
 
 type BlockParquet struct {
-	MessageID string `parquet:"name=message_id, type=UTF8, encoding=PLAIN_DICTIONARY"`
+	MessageID string `parquet:"name=message_id, type=BYTE_ARRAY, convertedType=UTF8, encoding=PLAIN_DICTIONARY"`
 	Data      string `parquet:"name=data, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
 }
