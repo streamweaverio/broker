@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/streamweaverio/broker/internal/archiver"
 	"github.com/streamweaverio/broker/internal/logging"
 	"github.com/streamweaverio/broker/internal/redis"
-	"github.com/streamweaverio/broker/internal/storage"
 	"github.com/streamweaverio/broker/pkg/utils"
 	"go.uber.org/zap"
 )
@@ -15,7 +15,7 @@ type TimeRetentionPolicy struct {
 	CancelCtx        context.Context
 	Metadataservice  redis.StreamMetadataService
 	Streamservice    redis.RedisStreamService
-	StorageManager   storage.StorageManager
+	Archiver         archiver.Archiver
 	Logger           logging.LoggerContract
 	RegistryKey      string
 	MessageBatchSize int64
@@ -29,7 +29,7 @@ type TimeRetentionPolicyOpts struct {
 	Redis                 redis.RedisStreamClient
 	RegistryKey           string
 	MessageBatchSize      int64
-	StorageManager        storage.StorageManager
+	Archiver              archiver.Archiver
 }
 
 func NewTimeRetentionPolicy(opts *TimeRetentionPolicyOpts, logger logging.LoggerContract) *TimeRetentionPolicy {
@@ -43,7 +43,6 @@ func NewTimeRetentionPolicy(opts *TimeRetentionPolicyOpts, logger logging.Logger
 		Streamservice:    opts.Streamservice,
 		Logger:           logger,
 		RegistryKey:      opts.RegistryKey,
-		StorageManager:   opts.StorageManager,
 		MessageBatchSize: opts.MessageBatchSize,
 	}
 }
@@ -92,7 +91,7 @@ func (s *TimeRetentionPolicy) ArchiveMessages(stream string, minID string) error
 			return fmt.Errorf("failed to get messages from stream %s: %w", stream, err)
 		}
 
-		err = s.StorageManager.ArchiveMessages(s.CancelCtx, stream, messages)
+		err = s.Archiver.Archive(s.CancelCtx, stream, messages)
 		if err != nil {
 			return fmt.Errorf("failed to archive messages: %w", err)
 		}
@@ -124,8 +123,8 @@ func (s *TimeRetentionPolicy) ArchiveMessages(stream string, minID string) error
 			// Set new minID for next batch
 			currentMinId = messages[len(messages)-1].ID
 
-			// Add to archive processing queue
-			err = s.StorageManager.ArchiveMessages(s.CancelCtx, stream, messages)
+			// Send to archiver
+			err = s.Archiver.Archive(s.CancelCtx, stream, messages)
 			if err != nil {
 				s.Logger.Error("Failed to archive messages", zap.String("stream", stream), zap.Error(err))
 				continue
