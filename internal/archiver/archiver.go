@@ -108,52 +108,44 @@ func (a *ArchiverImpl) Archive(ctx context.Context, streamName string, messages 
 }
 
 func (a *ArchiverImpl) SerializeToParquet(messages []rdb.XMessage, meta *block.BlockMetadata) (io.ReadCloser, error) {
-	r, w := io.Pipe()
+	// Create a buffer to store the Parquet data
+	buf := &bytes.Buffer{}
+	fw := NewBufferFile(buf, 0)
 
-	go func() {
-		defer w.Close()
+	// Create Parquet writer with 4 goroutines for parallel writing
+	pw, err := writer.NewParquetWriter(fw, new(block.BlockParquet), 4)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Parquet writer: %w", err)
+	}
 
-		buf := &bytes.Buffer{}
-		fw := NewBufferFile(buf, 0)
+	// Set compression type
+	pw.CompressionType = parquet.CompressionCodec_SNAPPY
 
-		pw, err := writer.NewParquetWriter(fw, new(block.BlockParquet), 4)
-		if err != nil {
-			a.Logger.Error("Failed to create Parquet writer", zap.Error(err))
-			w.CloseWithError(fmt.Errorf("failed to create Parquet writer: %w", err))
-			return
+	// Write messages to Parquet format
+	for _, msg := range messages {
+		record := &block.BlockParquet{
+			MessageID: msg.ID,
+			Data:      utils.SerializeStreamMessageValues(msg.Values),
 		}
 
-		pw.CompressionType = parquet.CompressionCodec_SNAPPY
-
-		for _, msg := range messages {
-			record := &block.BlockParquet{
-				MessageID: msg.ID,
-				Data:      utils.SerializeStreamMessageValues(msg.Values),
-			}
-
-			if err = pw.Write(record); err != nil {
-				a.Logger.Error("Failed to write record to Parquet", zap.Error(err))
-				w.CloseWithError(fmt.Errorf("failed to write record to Parquet: %w", err))
-
-				if err = pw.WriteStop(); err != nil {
-					a.Logger.Error("Failed to close Parquet writer", zap.Error(err))
-				}
-
-				return
-			}
+		if err = pw.Write(record); err != nil {
+			_ = pw.WriteStop() // Try to close properly
+			return nil, fmt.Errorf("failed to write record to Parquet: %w", err)
 		}
+	}
 
-		if err = pw.WriteStop(); err != nil {
-			a.Logger.Error("Failed to close Parquet writer", zap.Error(err))
-			w.CloseWithError(fmt.Errorf("failed to write Parquet file: %w", err))
-			return
-		}
+	// Properly close the writer to flush all data
+	if err = pw.WriteStop(); err != nil {
+		return nil, fmt.Errorf("failed to finalize Parquet file: %w", err)
+	}
 
-		meta.ParquetFileSize = buf.Len()
-		meta.ParquetFooter = pw.Footer
-	}()
+	// Update metadata
+	meta.ParquetFileSize = buf.Len()
+	meta.ParquetFooter = pw.Footer
 
-	return r, nil
+	// Create a reader from the buffer
+	reader := io.NopCloser(bytes.NewReader(buf.Bytes()))
+	return reader, nil
 }
 
 // CreateBloomFilter generates a bloom filter containing all message IDs in the block
@@ -185,8 +177,6 @@ func (a *ArchiverImpl) CreateBloomFilter(messages []rdb.XMessage, meta *block.Bl
 }
 
 func (a *ArchiverImpl) CreateMetadata(meta *block.BlockMetadata) ([]byte, error) {
-	a.Logger.Info("Creating block metadata...", zap.Any("metadata", meta)) // Log the metadata for debugging
-
 	jsonData, err := json.Marshal(meta)
 	if err != nil {
 		a.Logger.Error("Failed to marshal metadata to JSON", zap.Error(err))
