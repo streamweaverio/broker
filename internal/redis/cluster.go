@@ -154,14 +154,5 @@ func NewClusterClient(opts *ClusterClientOptions, logger logging.LoggerContract)
 
 	logger.Info("Connected to Redis cluster, nodes:")
 
-	nodes, err := GetClusterInfo(opts.Ctx, client)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, node := range nodes.Nodes {
-		logger.Info("Cluster node info", zap.String("id", node.ID), zap.String("address", node.Address), zap.String("hostname", node.Hostname), zap.Strings("flags", node.Flags), zap.String("master", node.Master), zap.Int64("ping_sent", node.PingSent), zap.Int64("ping_recv", node.PingRecv), zap.Int64("config_epoch", node.ConfigEpoch), zap.String("link_state", node.LinkState), zap.String("slot", node.Slot))
-	}
-
 	return client, nil
 }
