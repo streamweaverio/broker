@@ -1,6 +1,10 @@
 package block
 
-import "io"
+import (
+	"io"
+
+	"github.com/xitongsys/parquet-go/parquet"
+)
 
 type Block struct {
 	StreamName string
@@ -25,6 +29,12 @@ type BlockMetadata struct {
 	BlockEndId string `json:"block_end_id"`
 	// Number of messages in the block
 	MessageCount int `json:"message_count"`
+	// Size of the block's bloom filter
+	BloomFilterSize int `json:"bloom_filter_size"`
+	// Size of the block's parquet file
+	ParquetFileSize int `json:"parquet_file_size"`
+	// Parquet file footer
+	ParquetFooter *parquet.FileMetaData
 }
 
 type BlockParquet struct {
