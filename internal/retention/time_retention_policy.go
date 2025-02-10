@@ -41,6 +41,7 @@ func NewTimeRetentionPolicy(opts *TimeRetentionPolicyOpts, logger logging.Logger
 		CancelCtx:        opts.CancelCtx,
 		Metadataservice:  opts.StreamMetadataservice,
 		Streamservice:    opts.Streamservice,
+		Archiver:         opts.Archiver,
 		Logger:           logger,
 		RegistryKey:      opts.RegistryKey,
 		MessageBatchSize: opts.MessageBatchSize,
@@ -55,10 +56,10 @@ func (s *TimeRetentionPolicy) Enforce() error {
 	}
 
 	streamCount := len(streams)
-	s.Logger.Info("Found streams with time retention policy attached", zap.Int("count", streamCount))
+	s.Logger.Debug("Found streams with time retention policy attached", zap.Int("count", streamCount))
 
 	for _, stream := range streams {
-		s.Logger.Info("Applying time retention policy to stream...", zap.String("hash", stream))
+		s.Logger.Debug("Applying time retention policy to stream...", zap.String("hash", stream))
 		err := s.ApplyPolicy(stream)
 		if err != nil {
 			s.Logger.Error("Failed to apply time retention policy to stream", zap.String("stream_hash", stream), zap.Error(err))
@@ -71,7 +72,7 @@ func (s *TimeRetentionPolicy) Enforce() error {
 // Archives messages older than the minID from the stream
 func (s *TimeRetentionPolicy) ArchiveMessages(stream string, minID string) error {
 	// Count affected messages
-	affectedMsgCount, err := s.Streamservice.CountMessagesOlderThan(stream, minID)
+	affectedMsgCount, err := s.Streamservice.CountMessagesOlderThan(stream, minID, s.MessageBatchSize)
 	if err != nil {
 		return fmt.Errorf("failed to count messages in stream %s: %w", stream, err)
 	}
