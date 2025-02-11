@@ -50,7 +50,7 @@ func NewClient(opts *SimulatorClientOptions, logger logging.LoggerContract) (*Cl
 
 func ProduceMessages(stream string, client broker.StreamWeaverBrokerClient, logger logging.LoggerContract) {
 	logger.Info("Producing message...")
-	limit := 1000
+	limit := 1 + rand.Intn(7000)
 	messages := make([]*broker.StreamMessage, limit)
 
 	for i := 0; i < limit; i++ {
@@ -58,7 +58,7 @@ func ProduceMessages(stream string, client broker.StreamWeaverBrokerClient, logg
 		// Random value between 1 and 4000
 		total := 1 + rand.Intn(4000)
 		timestamp := time.Now().UnixMilli()
-		messageContent := fmt.Sprintf("id=\"%s\" order_total=%d created_at=%d", id, total, timestamp)
+		messageContent := fmt.Sprintf("id=%s order_total=%d created_at=%d", id, total, timestamp)
 		messages[i] = &broker.StreamMessage{
 			MessageContent: []byte(messageContent),
 		}
