@@ -65,7 +65,7 @@ func (s *LocalFilesystemStorage) ArchiveBlock(ctx context.Context, block *block.
 
 	// Write block components concurrently
 	go func() {
-		if err := writeFile(ctx, parquetPath, block.Parquet); err != nil {
+		if err := WriteFile(ctx, parquetPath, block.Parquet); err != nil {
 			errChan <- fmt.Errorf("failed to write parquet file: %v", err)
 			cancel()
 			return
@@ -74,7 +74,7 @@ func (s *LocalFilesystemStorage) ArchiveBlock(ctx context.Context, block *block.
 	}()
 
 	go func() {
-		if err := writeFile(ctx, bloomPath, block.Bloom); err != nil {
+		if err := WriteFile(ctx, bloomPath, block.Bloom); err != nil {
 			errChan <- fmt.Errorf("failed to write bloom filter: %v", err)
 			cancel()
 			return
@@ -103,19 +103,24 @@ func (s *LocalFilesystemStorage) ArchiveBlock(ctx context.Context, block *block.
 	return nil
 }
 
-// writeFile handles writing a ReadCloser to a file with proper cleanup
-func writeFile(ctx context.Context, path string, reader io.ReadCloser) error {
+// WriteFile handles writing a ReadCloser to a file with proper cleanup
+func WriteFile(ctx context.Context, path string, reader io.ReadCloser) error {
 	if reader == nil {
 		return fmt.Errorf("nil reader provided")
 	}
 	defer reader.Close()
 
-	// Create the file
-	file, err := os.Create(path)
+	// Create a temporary file in the same directory
+	tmpPath := path + ".tmp"
+	file, err := os.Create(tmpPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		file.Close()
+		// Clean up the temporary file if it still exists
+		os.Remove(tmpPath)
+	}()
 
 	// Create a buffered writer for better performance
 	writer := bufio.NewWriter(file)
@@ -128,7 +133,22 @@ func writeFile(ctx context.Context, path string, reader io.ReadCloser) error {
 			done <- err
 			return
 		}
-		done <- writer.Flush()
+		if err := writer.Flush(); err != nil {
+			done <- err
+			return
+		}
+		// Ensure all data is written to disk
+		if err := file.Sync(); err != nil {
+			done <- err
+			return
+		}
+		// Close the file before renaming
+		if err := file.Close(); err != nil {
+			done <- err
+			return
+		}
+		// Atomically rename the temporary file to the target path
+		done <- os.Rename(tmpPath, path)
 	}()
 
 	select {
