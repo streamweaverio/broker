@@ -2,6 +2,7 @@ package archiver
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/xitongsys/parquet-go/source"
 )
@@ -58,10 +59,20 @@ func (f *BufferFile) Close() error {
 }
 
 func (f *BufferFile) Seek(offset int64, whence int) (int64, error) {
+	// Seek in the ReadBuffer
 	abs, err := f.ReadBuffer.Seek(offset, whence)
 	if err != nil {
 		return 0, err
 	}
+
+	// Check if abs is within valid range
+	if abs < 0 || abs > int64(f.Buffer.Len()) {
+		return 0, fmt.Errorf("invalid seek position: %d", abs)
+	}
+
+	// Update both Buffer and ReadBuffer offsets
 	f.Offset = abs
+	f.ReadBuffer = bytes.NewReader(f.Buffer.Bytes()[abs:])
+
 	return abs, nil
 }
