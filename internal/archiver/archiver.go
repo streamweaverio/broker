@@ -58,7 +58,7 @@ func (a *ArchiverImpl) Archive(ctx context.Context, streamName string, messages 
 	// Generate block ID
 	blockStart := messages[0].ID
 	blockEnd := messages[len(messages)-1].ID
-	blockID := GenerateBlockID(blockEnd, blockStart)
+	blockID := GenerateBlockID(blockStart, blockEnd)
 
 	meta := &block.BlockMetadata{
 		StreamName:          streamName,
